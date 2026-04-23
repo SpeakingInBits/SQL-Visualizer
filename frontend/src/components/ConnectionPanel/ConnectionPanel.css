@@ -1,0 +1,69 @@
+.conn-panel {
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.conn-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  user-select: none;
+}
+.conn-title { font-weight: 600; font-size: 13px; flex: 1; }
+.conn-chevron { color: var(--text-dim); font-size: 10px; }
+.conn-active {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 10px;
+}
+.conn-name {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.conn-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 12px 12px;
+}
+.conn-row { display: flex; gap: 8px; }
+.conn-error {
+  background: rgba(247,96,96,.1);
+  border: 1px solid var(--red);
+  border-radius: 4px;
+  color: var(--red);
+  font-size: 12px;
+  padding: 6px 8px;
+}
+.trusted-row label { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; color: var(--text); }
+
+.conn-samples {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+.conn-samples-label {
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.conn-sample-btn {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  text-transform: capitalize;
+}
+.conn-sample-btn.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
