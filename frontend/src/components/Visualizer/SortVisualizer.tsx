@@ -3,6 +3,20 @@ import { motion, LayoutGroup } from 'framer-motion'
 import type { OrderByResult } from '../../types'
 import './Visualizer.css'
 
+// ── Persisted speed hook ───────────────────────────────────────────────────────
+const SPEED_KEY = 'viz_speed'
+export function usePersistedSpeed(): [number, (s: number) => void] {
+  const [speed, setSpeedState] = useState<number>(() => {
+    const v = parseFloat(localStorage.getItem(SPEED_KEY) ?? '1')
+    return isNaN(v) ? 1 : v
+  })
+  const setSpeed = (s: number) => {
+    localStorage.setItem(SPEED_KEY, String(s))
+    setSpeedState(s)
+  }
+  return [speed, setSpeed]
+}
+
 interface Props { result: OrderByResult }
 
 // ms per sort step at 1× speed
@@ -43,7 +57,7 @@ export default function SortVisualizer({ result }: Props) {
 
   const [frame, setFrame]   = useState(0)
   const [playing, setPlaying] = useState(false)
-  const [speed, setSpeed]   = useState(1)
+  const [speed, setSpeed]   = usePersistedSpeed()
 
   const reset = useCallback(() => { setFrame(0); setPlaying(false) }, [])
 

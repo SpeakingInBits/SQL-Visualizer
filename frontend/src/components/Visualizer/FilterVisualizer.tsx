@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { WhereResult } from '../../types'
-import { AnimControls } from './SortVisualizer'
+import { AnimControls, usePersistedSpeed } from './SortVisualizer'
 import './Visualizer.css'
 
 interface Props { result: WhereResult }
@@ -26,7 +26,7 @@ export default function FilterVisualizer({ result }: Props) {
 
   const [frame, setFrame]   = useState(0)
   const [playing, setPlaying] = useState(false)
-  const [speed, setSpeed]   = useState(1)
+  const [speed, setSpeed]   = usePersistedSpeed()
 
   const reset = useCallback(() => { setFrame(0); setPlaying(false) }, [])
 

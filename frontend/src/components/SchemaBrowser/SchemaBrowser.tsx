@@ -6,7 +6,6 @@ import './SchemaBrowser.css'
 interface Props {
   connected: boolean
   engine?: EngineType
-  onTableSelect: (table: { name: string; schema: string }) => void
 }
 
 interface TableNode {
@@ -18,7 +17,7 @@ interface ColumnNode extends ColumnMeta {
   is_foreign_key?: boolean
 }
 
-export default function SchemaBrowser({ connected, engine, onTableSelect }: Props) {
+export default function SchemaBrowser({ connected, engine }: Props) {
   const [databases, setDatabases] = useState<string[]>([])
   const [selectedDb, setSelectedDb] = useState<string>('')
   const [tables, setTables] = useState<TableNode[]>([])
@@ -63,7 +62,6 @@ export default function SchemaBrowser({ connected, engine, onTableSelect }: Prop
       return
     }
     setExpandedTable(key)
-    onTableSelect(t)
     if (!columns[key]) {
       try {
         const res = await getColumns(t.name, t.schema || 'dbo', selectedDb || undefined)

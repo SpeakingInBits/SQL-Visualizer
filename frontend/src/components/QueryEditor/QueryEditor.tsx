@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Editor from '@monaco-editor/react'
 import { runQuery, visualizeQuery } from '../../api/client'
 import type { VizResult, PlainResult } from '../../types'
@@ -7,28 +7,18 @@ import './QueryEditor.css'
 
 interface Props {
   connected: boolean
-  selectedTable: { name: string; schema: string } | null
   onVizResult: (r: VizResult | null) => void
   vizResult: VizResult | null
 }
 
 type ActiveTab = 'results' | 'visualizer'
 
-export default function QueryEditor({ connected, selectedTable, onVizResult, vizResult }: Props) {
+export default function QueryEditor({ connected, onVizResult, vizResult }: Props) {
   const [sql, setSql] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [plainResult, setPlainResult] = useState<PlainResult | null>(null)
   const [activeTab, setActiveTab] = useState<ActiveTab>('results')
-
-  // When user clicks a table in schema browser, pre-fill a SELECT
-  useEffect(() => {
-    if (!selectedTable) return
-    const qualifier = selectedTable.schema && selectedTable.schema !== 'dbo'
-      ? `[${selectedTable.schema}].[${selectedTable.name}]`
-      : `[${selectedTable.name}]`
-    setSql(`SELECT TOP 100 * FROM ${qualifier}`)
-  }, [selectedTable])
 
   async function handleRun() {
     if (!sql.trim()) return
