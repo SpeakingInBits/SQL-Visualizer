@@ -149,3 +149,105 @@
   z-index: 10;
   overflow: visible;
 }
+
+/* ── WHERE / Filter visualizer ───────────────────────────── */
+.filter-eval-card {
+  margin: 6px 14px 4px;
+  padding: 10px 14px;
+  background: rgba(247, 201, 72, 0.07);
+  border: 1px solid rgba(247, 201, 72, 0.22);
+  border-radius: 8px;
+  min-height: 40px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.filter-eval-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--yellow);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  padding-top: 2px;
+  min-width: 72px;
+}
+.filter-eval-scanning {
+  font-size: 12px;
+  color: var(--text-dim);
+  font-style: italic;
+  padding-top: 2px;
+}
+.filter-eval-conditions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+.filter-eval-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.filter-cond-text {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+  background: var(--surface2);
+  padding: 2px 7px;
+  border-radius: 4px;
+  flex: 1;
+}
+.filter-cond-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 4px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.badge-true {
+  background: rgba(62, 207, 142, 0.14);
+  color: var(--green);
+  border: 1px solid rgba(62, 207, 142, 0.30);
+}
+.badge-false {
+  background: rgba(247, 96, 96, 0.12);
+  color: var(--red);
+  border: 1px solid rgba(247, 96, 96, 0.25);
+}
+.filter-layout {
+  display: flex;
+  gap: 0;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+.filter-table-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 8px 14px 12px;
+}
+.filter-table-col + .filter-table-col {
+  border-left: 1px solid var(--border);
+}
+.filter-table-col .viz-table-wrap {
+  padding: 0;
+}
+
+/* ── ORDER BY sort status banner ─────────────────────────── */
+.sort-status-banner {
+  padding: 5px 14px;
+  font-size: 12px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+}
+.sort-status-active { color: var(--yellow); }
+.sort-status-done   { color: var(--green); font-weight: 600; }
+.sort-status-ready  { color: var(--accent); font-style: italic; }

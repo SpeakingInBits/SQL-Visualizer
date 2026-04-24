@@ -11,7 +11,6 @@ export default function App() {
   const [status, setStatus] = useState<ConnectionStatus>({ connected: false })
   const [vizResult, setVizResult] = useState<VizResult | null>(null)
   const [sideTab, setSideTab] = useState<'schema' | 'scripts'>('schema')
-  const [selectedTable, setSelectedTable] = useState<{ name: string; schema: string } | null>(null)
 
   const refreshStatus = useCallback(async () => {
     try {
@@ -25,10 +24,6 @@ export default function App() {
   useEffect(() => {
     refreshStatus()
   }, [refreshStatus])
-
-  function handleTableSelect(table: { name: string; schema: string }) {
-    setSelectedTable(table)
-  }
 
   return (
     <div className="app-shell">
@@ -55,7 +50,6 @@ export default function App() {
           <SchemaBrowser
             connected={status.connected}
             engine={status.engine}
-            onTableSelect={handleTableSelect}
           />
         ) : (
           <ScriptLibrary connected={status.connected} engine={status.engine} />
@@ -66,7 +60,6 @@ export default function App() {
       <main className="main-content">
         <QueryEditor
           connected={status.connected}
-          selectedTable={selectedTable}
           onVizResult={setVizResult}
           vizResult={vizResult}
         />

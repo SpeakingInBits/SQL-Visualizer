@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import * as d3 from 'd3'
 import type { JoinResult } from '../../types'
-import { AnimControls } from './SortVisualizer'
+import { AnimControls, usePersistedSpeed } from './SortVisualizer'
 import './Visualizer.css'
 
 interface Props { result: JoinResult }
@@ -46,7 +46,7 @@ export default function JoinVisualizer({ result }: Props) {
   const maxFrame = comparisons.length
   const [frame, setFrame] = useState(0)
   const [playing, setPlaying] = useState(false)
-  const [speed, setSpeed] = useState(1)
+  const [speed, setSpeed] = usePersistedSpeed()
   const svgRef       = useRef<SVGSVGElement>(null)
   const leftRef      = useRef<HTMLDivElement>(null)
   const rightRef     = useRef<HTMLDivElement>(null)
@@ -203,6 +203,8 @@ export default function JoinVisualizer({ result }: Props) {
         onPause={() => setPlaying(false)}
         onReset={reset}
         onSpeedChange={setSpeed}
+        onStepBack={() => { setPlaying(false); setFrame(f => Math.max(0, f - 1)) }}
+        onStepForward={() => { setPlaying(false); setFrame(f => Math.min(maxFrame, f + 1)) }}
       />
 
       {/* Side-by-side source tables */}

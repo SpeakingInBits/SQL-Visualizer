@@ -1,22 +1,66 @@
-import { useState, useEffect, useCallback } from 'react'
-import { motion, AnimatePresence, LayoutGroup } from 'framer-motion'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { motion, LayoutGroup } from 'framer-motion'
 import type { OrderByResult } from '../../types'
 import './Visualizer.css'
 
+// ── Persisted speed hook ───────────────────────────────────────────────────────
+const SPEED_KEY = 'viz_speed'
+export function usePersistedSpeed(): [number, (s: number) => void] {
+  const [speed, setSpeedState] = useState<number>(() => {
+    const v = parseFloat(localStorage.getItem(SPEED_KEY) ?? '1')
+    return isNaN(v) ? 1 : v
+  })
+  const setSpeed = (s: number) => {
+    localStorage.setItem(SPEED_KEY, String(s))
+    setSpeedState(s)
+  }
+  return [speed, setSpeed]
+}
+
 interface Props { result: OrderByResult }
 
-// ms per row at 1× speed
-const BASE_DELAY = 700
+// ms per sort step at 1× speed
+const BASE_DELAY = 800
+
+// Build stable mapping: sortedToOrig[i] = original (unsorted) index for sorted row i
+export function buildSortedToOrigMap(
+  unsorted: Record<string, unknown>[],
+  sorted: Record<string, unknown>[]
+): number[] {
+  const available = unsorted.map((row, idx) => ({ row, idx, used: false }))
+  return sorted.map(sr => {
+    const key = JSON.stringify(sr)
+    const found = available.find(a => !a.used && JSON.stringify(a.row) === key)
+    if (found) { found.used = true; return found.idx }
+    return 0
+  })
+}
+
+// Generate selection-sort step states: steps[f] = array of origIdx in display order after f sorts
+export function buildSortSteps(n: number, sortedToOrig: number[]): number[][] {
+  const current = Array.from({ length: n }, (_, i) => i)
+  const steps: number[][] = [[...current]]
+  for (let i = 0; i < n; i++) {
+    const target = sortedToOrig[i]
+    const pos = current.indexOf(target)
+    if (pos !== i) {
+      ;[current[i], current[pos]] = [current[pos], current[i]]
+    }
+    steps.push([...current])
+  }
+  return steps
+}
 
 export default function SortVisualizer({ result }: Props) {
-  const maxFrame = result.sorted_rows.length
-  const [frame, setFrame] = useState(0)
+  const N = result.unsorted_rows.length
+  const maxFrame = N
+
+  const [frame, setFrame]   = useState(0)
   const [playing, setPlaying] = useState(false)
-  const [speed, setSpeed] = useState(1)
+  const [speed, setSpeed]   = usePersistedSpeed()
 
   const reset = useCallback(() => { setFrame(0); setPlaying(false) }, [])
 
-  // Auto-advance ticker
   useEffect(() => {
     if (!playing) return
     if (frame >= maxFrame) { setPlaying(false); return }
@@ -24,26 +68,21 @@ export default function SortVisualizer({ result }: Props) {
     return () => clearTimeout(id)
   }, [playing, frame, speed, maxFrame])
 
-  // Placed rows = sorted_rows[0..frame-1]
-  const placedRows = result.sorted_rows.slice(0, frame)
+  // Build sort steps once
+  const sortedToOrig = useMemo(
+    () => buildSortedToOrigMap(result.unsorted_rows, result.sorted_rows),
+    [result]
+  )
+  const steps = useMemo(
+    () => buildSortSteps(N, sortedToOrig),
+    [N, sortedToOrig]
+  )
 
-  // Remaining unsorted rows (with stable original index for keys, duplicate-safe)
-  const remaining: { row: typeof result.unsorted_rows[0]; origIdx: number }[] = []
-  {
-    const consumed = new Map<string, number>()
-    placedRows.forEach(r => {
-      const k = JSON.stringify(r)
-      consumed.set(k, (consumed.get(k) ?? 0) + 1)
-    })
-    result.unsorted_rows.forEach((r, idx) => {
-      const k = JSON.stringify(r)
-      const c = consumed.get(k) ?? 0
-      if (c > 0) consumed.set(k, c - 1)
-      else remaining.push({ row: r, origIdx: idx })
-    })
-  }
-
+  const displayOrder = steps[Math.min(frame, steps.length - 1)]
   const isSortKey = (ci: number) => result.sort_key_indices.includes(ci)
+
+  // The original index of the row that just landed in its sorted position
+  const newestOrigIdx = frame > 0 ? sortedToOrig[frame - 1] : -1
 
   return (
     <div className="viz-root">
@@ -61,7 +100,26 @@ export default function SortVisualizer({ result }: Props) {
         onPause={() => setPlaying(false)}
         onReset={reset}
         onSpeedChange={setSpeed}
+        onStepBack={() => { setPlaying(false); setFrame(f => Math.max(0, f - 1)) }}
+        onStepForward={() => { setPlaying(false); setFrame(f => Math.min(maxFrame, f + 1)) }}
       />
+
+      {/* Status banner */}
+      {frame === 0 && (
+        <div className="sort-status-banner">
+          Rows shown in original order — press <strong>Play</strong> to sort
+        </div>
+      )}
+      {frame > 0 && frame < maxFrame && (
+        <div className="sort-status-banner sort-status-active">
+          Sorting… {frame} of {N} rows placed
+        </div>
+      )}
+      {frame >= maxFrame && (
+        <div className="sort-status-banner sort-status-done">
+          ✓ Sorted — {N} rows in order
+        </div>
+      )}
 
       <div className="viz-table-wrap">
         <LayoutGroup>
@@ -75,50 +133,54 @@ export default function SortVisualizer({ result }: Props) {
                 ))}
               </tr>
             </thead>
-            <motion.tbody layout>
-              <AnimatePresence>
-                {/* Sorted (placed) rows — slide in green */}
-                {placedRows.map((row, i) => (
+            <tbody>
+              {displayOrder.map((origIdx, position) => {
+                const isSorted  = position < frame
+                const isNewest  = origIdx === newestOrigIdx && frame > 0
+                const row       = result.unsorted_rows[origIdx]
+                return (
                   <motion.tr
-                    key={`p-${i}`}
+                    key={origIdx}
                     layout
-                    initial={{ opacity: 0, x: -24 }}
-                    animate={{
-                      opacity: 1,
-                      x: 0,
-                      backgroundColor:
-                        i === placedRows.length - 1
-                          ? 'rgba(62,207,142,0.14)'
-                          : 'rgba(62,207,142,0.04)',
-                    }}
-                    transition={{ duration: 0.35 }}
+                    animate={isNewest
+                      ? {
+                          opacity: 1,
+                          backgroundColor: [
+                            'rgba(62,207,142,0.45)',
+                            'rgba(62,207,142,0.45)',
+                            'rgba(62,207,142,0.07)',
+                          ],
+                        }
+                      : {
+                          opacity: isSorted || frame === 0 ? 1 : 0.32,
+                          backgroundColor: isSorted
+                            ? 'rgba(62,207,142,0.07)'
+                            : 'transparent',
+                        }
+                    }
+                    transition={isNewest
+                      ? { layout: { duration: BASE_DELAY * 0.75 / 1000 / speed }, duration: 1.1, times: [0, 0.3, 1] }
+                      : { layout: { duration: BASE_DELAY * 0.75 / 1000 / speed }, duration: 0.25 }
+                    }
                   >
                     {result.columns.map((c, ci) => (
-                      <td key={c.name} style={isSortKey(ci) ? { color: 'var(--green)', fontWeight: 600 } : {}}>
+                      <td
+                        key={c.name}
+                        style={
+                          isSorted
+                            ? { color: 'var(--green)', fontWeight: isSortKey(ci) ? 700 : 400 }
+                            : isSortKey(ci) && frame === 0
+                              ? { color: 'var(--accent)' }
+                              : {}
+                        }
+                      >
                         {String(row[c.name] ?? '')}
                       </td>
                     ))}
                   </motion.tr>
-                ))}
-
-                {/* Unsorted remaining rows — dim when sorting has started */}
-                {remaining.map(({ row, origIdx }) => (
-                  <motion.tr
-                    key={`u-${origIdx}`}
-                    layout
-                    animate={{ opacity: frame > 0 ? 0.28 : 1 }}
-                    exit={{ opacity: 0, x: 20, transition: { duration: 0.25 } }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    {result.columns.map((c, ci) => (
-                      <td key={c.name} style={isSortKey(ci) && frame === 0 ? { color: 'var(--accent)' } : {}}>
-                        {String(row[c.name] ?? '')}
-                      </td>
-                    ))}
-                  </motion.tr>
-                ))}
-              </AnimatePresence>
-            </motion.tbody>
+                )
+              })}
+            </tbody>
           </table>
         </LayoutGroup>
       </div>
@@ -130,7 +192,7 @@ export default function SortVisualizer({ result }: Props) {
 
 export function AnimControls({
   playing, frame, maxFrame, speed,
-  onPlay, onPause, onReset, onSpeedChange,
+  onPlay, onPause, onReset, onSpeedChange, onStepBack, onStepForward,
 }: {
   playing: boolean
   frame: number
@@ -140,17 +202,31 @@ export function AnimControls({
   onPause: () => void
   onReset: () => void
   onSpeedChange: (s: number) => void
+  onStepBack: () => void
+  onStepForward: () => void
 }) {
   const done = frame >= maxFrame
   return (
     <div className="viz-controls">
       <button className="btn btn-secondary btn-sm" onClick={onReset}>↺ Reset</button>
       <button
+        className="btn btn-secondary btn-sm"
+        onClick={onStepBack}
+        disabled={frame <= 0}
+        title="Step back one frame"
+      >◀◀</button>
+      <button
         className={`btn btn-sm ${playing ? 'btn-secondary' : 'btn-primary'}`}
         onClick={playing ? onPause : onPlay}
       >
         {playing ? '⏸ Pause' : done ? '↺ Replay' : '▶ Play'}
       </button>
+      <button
+        className="btn btn-secondary btn-sm"
+        onClick={onStepForward}
+        disabled={frame >= maxFrame}
+        title="Step forward one frame"
+      >▶▶</button>
 
       <div className="viz-progress" title={`${frame} / ${maxFrame} rows`}>
         <div
