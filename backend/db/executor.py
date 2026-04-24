@@ -185,19 +185,29 @@ def _viz_where(sql: str, parsed, conn: ActiveConnection) -> dict[str, Any]:
     all_rows = _rows_to_dicts(cur, cur.fetchmany(MAX_VIZ_ROWS))
     columns = _col_meta(cur)
 
-    # Execute original filtered query to get matching rows
-    cur.execute(sql)
-    matched_rows = _rows_to_dicts(cur, cur.fetchmany(MAX_VIZ_ROWS))
-
-    # Build match mask: True if row appears in matched set
-    # Simple key-equality check on all columns
-    matched_set = {_row_key(r) for r in matched_rows}
-    match_mask = [_row_key(r) in matched_set for r in all_rows]
-
-    # Extract WHERE clause text for highlighting
+    # Extract WHERE clause text
     where_match = re.search(r"\bWHERE\b(.*?)(?=\bORDER\b|\bGROUP\b|\bHAVING\b|\bLIMIT\b|$)",
                             sql, re.IGNORECASE | re.DOTALL)
     where_text = where_match.group(1).strip() if where_match else ""
+
+    # Split into individual AND sub-conditions for step-by-step visualization
+    conditions = _split_where_conditions(where_text) if where_text else [where_text]
+
+    # Base query for per-condition evaluation (no ORDER BY/GROUP BY needed)
+    sql_base = re.sub(r"\bORDER\s+BY\b.*$", "", sql_no_where, flags=re.IGNORECASE | re.DOTALL).strip()
+    all_row_keys = [_row_key(r) for r in all_rows]
+
+    # Build per-row per-condition boolean matrix
+    condition_results: list[list[bool]] = [[] for _ in all_rows]
+    for cond in conditions:
+        cond_sql = f"{sql_base} WHERE {cond}"
+        cur.execute(cond_sql)
+        cond_set = {_row_key(r) for r in _rows_to_dicts(cur, cur.fetchall())}
+        for i, key in enumerate(all_row_keys):
+            condition_results[i].append(key in cond_set)
+
+    # Overall match mask: row passes if all sub-conditions pass
+    match_mask = [all(condition_results[i]) for i in range(len(all_rows))]
 
     return {
         "viz_type": "where",
@@ -205,7 +215,36 @@ def _viz_where(sql: str, parsed, conn: ActiveConnection) -> dict[str, Any]:
         "all_rows": all_rows,
         "match_mask": match_mask,
         "where_text": where_text,
+        "conditions": conditions,
+        "condition_results": condition_results,
     }
+
+
+def _split_where_conditions(where_text: str) -> list[str]:
+    """Split a WHERE clause on top-level AND operators (respects parentheses)."""
+    conditions: list[str] = []
+    depth = 0
+    start = 0
+    i = 0
+    upper = where_text.upper()
+    while i < len(where_text):
+        ch = where_text[i]
+        if ch == '(':
+            depth += 1
+            i += 1
+        elif ch == ')':
+            depth -= 1
+            i += 1
+        elif depth == 0 and upper[i:i + 5] == ' AND ':
+            conditions.append(where_text[start:i].strip())
+            i += 5
+            start = i
+        else:
+            i += 1
+    last = where_text[start:].strip()
+    if last:
+        conditions.append(last)
+    return conditions if conditions else [where_text]
 
 
 def _row_key(row: dict) -> tuple:

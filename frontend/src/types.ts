@@ -58,6 +58,8 @@ export interface WhereResult {
   all_rows: Record<string, unknown>[]
   match_mask: boolean[]
   where_text: string
+  conditions: string[]
+  condition_results: boolean[][]  // [row_idx][cond_idx]
 }
 
 export interface JoinResult {
