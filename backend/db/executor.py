@@ -117,13 +117,12 @@ def _detect_stmt_type(sql: str) -> str:
 
 
 def _detect_clauses(parsed) -> dict[str, bool]:
-    flat = [str(t).upper() for t in parsed.flatten()]
     text_upper = parsed.value.upper()
     return {
-        "has_where": "WHERE" in flat,
-        "has_order_by": "ORDER" in flat and "BY" in flat,
-        "has_join": bool(re.search(r"\bJOIN\b", text_upper)),
-        "has_group_by": "GROUP" in flat and "BY" in flat,
+        "has_where":    bool(re.search(r"\bWHERE\b",         text_upper)),
+        "has_order_by": bool(re.search(r"\bORDER\s+BY\b",    text_upper)),
+        "has_join":     bool(re.search(r"\bJOIN\b",          text_upper)),
+        "has_group_by": bool(re.search(r"\bGROUP\s+BY\b",    text_upper)),
     }
 
 
