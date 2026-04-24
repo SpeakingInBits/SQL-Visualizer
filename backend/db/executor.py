@@ -91,9 +91,11 @@ def visualize_query(sql: str, conn: ActiveConnection | None = None) -> dict[str,
 
     clauses = _detect_clauses(parsed)
 
-    # Priority: JOIN > ORDER BY > WHERE  (a query may have several)
+    # Priority: JOIN > WHERE+ORDER BY > ORDER BY > WHERE  (a query may have several)
     if clauses["has_join"]:
         return _viz_join(sql, parsed, conn)
+    if clauses["has_where"] and clauses["has_order_by"]:
+        return _viz_where_order_by(sql, parsed, conn)
     if clauses["has_order_by"]:
         return _viz_order_by(sql, parsed, conn)
     if clauses["has_where"]:
@@ -176,12 +178,15 @@ def _viz_order_by(sql: str, parsed, conn: ActiveConnection) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 def _viz_where(sql: str, parsed, conn: ActiveConnection) -> dict[str, Any]:
-    # Get all rows (remove WHERE clause)
+    # Remove WHERE clause to get the base table query
     sql_no_where = re.sub(r"\bWHERE\b.*?(?=\bORDER\b|\bGROUP\b|\bHAVING\b|\bLIMIT\b|$)",
                           "", sql, flags=re.IGNORECASE | re.DOTALL).strip()
 
+    # Also strip ORDER BY so all_rows reflects natural table order, not the sort order
+    sql_base = re.sub(r"\bORDER\s+BY\b.*$", "", sql_no_where, flags=re.IGNORECASE | re.DOTALL).strip()
+
     cur = conn.cursor()
-    cur.execute(sql_no_where)
+    cur.execute(sql_base)
     all_rows = _rows_to_dicts(cur, cur.fetchmany(MAX_VIZ_ROWS))
     columns = _col_meta(cur)
 
@@ -192,9 +197,6 @@ def _viz_where(sql: str, parsed, conn: ActiveConnection) -> dict[str, Any]:
 
     # Split into individual AND sub-conditions for step-by-step visualization
     conditions = _split_where_conditions(where_text) if where_text else [where_text]
-
-    # Base query for per-condition evaluation (no ORDER BY/GROUP BY needed)
-    sql_base = re.sub(r"\bORDER\s+BY\b.*$", "", sql_no_where, flags=re.IGNORECASE | re.DOTALL).strip()
     all_row_keys = [_row_key(r) for r in all_rows]
 
     # Build per-row per-condition boolean matrix
@@ -252,8 +254,47 @@ def _row_key(row: dict) -> tuple:
 
 
 # ---------------------------------------------------------------------------
-# JOIN visualisation
+# WHERE + ORDER BY combined visualisation
 # ---------------------------------------------------------------------------
+
+def _viz_where_order_by(sql: str, parsed, conn: ActiveConnection) -> dict[str, Any]:
+    # Run WHERE visualisation first
+    where_data = _viz_where(sql, parsed, conn)
+
+    # Matched rows in their original (unsorted) order
+    unsorted_rows = [
+        r for r, m in zip(where_data["all_rows"], where_data["match_mask"]) if m
+    ]
+
+    # Run the full query to get sorted matched rows
+    cur = conn.cursor()
+    cur.execute(sql)
+    sorted_rows = _rows_to_dicts(cur, cur.fetchmany(MAX_VIZ_ROWS))
+
+    # Parse sort-key column names
+    order_match = re.search(r"\bORDER\s+BY\b(.*?)(?:LIMIT|OFFSET|$)", sql, re.IGNORECASE | re.DOTALL)
+    sort_keys: list[str] = []
+    if order_match:
+        for part in order_match.group(1).split(","):
+            col = re.sub(r"\b(ASC|DESC)\b", "", part, flags=re.IGNORECASE).strip().strip("[]\"'`")
+            if col:
+                sort_keys.append(col.split(".")[-1])
+
+    sort_key_indices = [
+        i for i, c in enumerate(where_data["columns"]) if c["name"] in sort_keys
+    ]
+
+    return {
+        **where_data,
+        "viz_type": "where_order_by",
+        "unsorted_rows": unsorted_rows,
+        "sorted_rows": sorted_rows,
+        "sort_key_indices": sort_key_indices,
+        "sort_keys": sort_keys,
+    }
+
+
+
 
 def _viz_join(sql: str, parsed, conn: ActiveConnection) -> dict[str, Any]:
     sql_upper = sql.upper()
@@ -288,8 +329,10 @@ def _viz_join(sql: str, parsed, conn: ActiveConnection) -> dict[str, Any]:
     else:
         right_rows, right_columns = [], []
 
-    # Execute the original JOIN query
-    cur.execute(sql)
+    # Execute the JOIN query WITHOUT ORDER BY to keep merged_rows in the same
+    # nested-loop order as match_pairs (ORDER BY would misalign the two arrays)
+    sql_no_order = re.sub(r"\bORDER\s+BY\b.*$", "", sql, flags=re.IGNORECASE | re.DOTALL).strip()
+    cur.execute(sql_no_order)
     merged_rows = _rows_to_dicts(cur, cur.fetchmany(MAX_VIZ_ROWS))
     merged_columns = _col_meta(cur)
 

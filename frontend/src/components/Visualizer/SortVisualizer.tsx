@@ -23,7 +23,7 @@ interface Props { result: OrderByResult }
 const BASE_DELAY = 800
 
 // Build stable mapping: sortedToOrig[i] = original (unsorted) index for sorted row i
-function buildSortedToOrigMap(
+export function buildSortedToOrigMap(
   unsorted: Record<string, unknown>[],
   sorted: Record<string, unknown>[]
 ): number[] {
@@ -37,7 +37,7 @@ function buildSortedToOrigMap(
 }
 
 // Generate selection-sort step states: steps[f] = array of origIdx in display order after f sorts
-function buildSortSteps(n: number, sortedToOrig: number[]): number[][] {
+export function buildSortSteps(n: number, sortedToOrig: number[]): number[][] {
   const current = Array.from({ length: n }, (_, i) => i)
   const steps: number[][] = [[...current]]
   for (let i = 0; i < n; i++) {
@@ -100,6 +100,8 @@ export default function SortVisualizer({ result }: Props) {
         onPause={() => setPlaying(false)}
         onReset={reset}
         onSpeedChange={setSpeed}
+        onStepBack={() => { setPlaying(false); setFrame(f => Math.max(0, f - 1)) }}
+        onStepForward={() => { setPlaying(false); setFrame(f => Math.min(maxFrame, f + 1)) }}
       />
 
       {/* Status banner */}
@@ -190,7 +192,7 @@ export default function SortVisualizer({ result }: Props) {
 
 export function AnimControls({
   playing, frame, maxFrame, speed,
-  onPlay, onPause, onReset, onSpeedChange,
+  onPlay, onPause, onReset, onSpeedChange, onStepBack, onStepForward,
 }: {
   playing: boolean
   frame: number
@@ -200,17 +202,31 @@ export function AnimControls({
   onPause: () => void
   onReset: () => void
   onSpeedChange: (s: number) => void
+  onStepBack: () => void
+  onStepForward: () => void
 }) {
   const done = frame >= maxFrame
   return (
     <div className="viz-controls">
       <button className="btn btn-secondary btn-sm" onClick={onReset}>↺ Reset</button>
       <button
+        className="btn btn-secondary btn-sm"
+        onClick={onStepBack}
+        disabled={frame <= 0}
+        title="Step back one frame"
+      >◀◀</button>
+      <button
         className={`btn btn-sm ${playing ? 'btn-secondary' : 'btn-primary'}`}
         onClick={playing ? onPause : onPlay}
       >
         {playing ? '⏸ Pause' : done ? '↺ Replay' : '▶ Play'}
       </button>
+      <button
+        className="btn btn-secondary btn-sm"
+        onClick={onStepForward}
+        disabled={frame >= maxFrame}
+        title="Step forward one frame"
+      >▶▶</button>
 
       <div className="viz-progress" title={`${frame} / ${maxFrame} rows`}>
         <div

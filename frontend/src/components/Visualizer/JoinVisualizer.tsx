@@ -203,6 +203,8 @@ export default function JoinVisualizer({ result }: Props) {
         onPause={() => setPlaying(false)}
         onReset={reset}
         onSpeedChange={setSpeed}
+        onStepBack={() => { setPlaying(false); setFrame(f => Math.max(0, f - 1)) }}
+        onStepForward={() => { setPlaying(false); setFrame(f => Math.min(maxFrame, f + 1)) }}
       />
 
       {/* Side-by-side source tables */}

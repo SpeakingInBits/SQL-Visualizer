@@ -62,6 +62,21 @@ export interface WhereResult {
   condition_results: boolean[][]  // [row_idx][cond_idx]
 }
 
+export interface WhereOrderByResult {
+  viz_type: 'where_order_by'
+  columns: { name: string }[]
+  all_rows: Record<string, unknown>[]
+  match_mask: boolean[]
+  where_text: string
+  conditions: string[]
+  condition_results: boolean[][]
+  // Sort phase data (matched rows only)
+  unsorted_rows: Record<string, unknown>[]
+  sorted_rows: Record<string, unknown>[]
+  sort_key_indices: number[]
+  sort_keys: string[]
+}
+
 export interface JoinResult {
   viz_type: 'join'
   join_type: string
@@ -81,7 +96,7 @@ export interface JoinResult {
   merged_rows: Record<string, unknown>[]
 }
 
-export type VizResult = PlainResult | OrderByResult | WhereResult | JoinResult
+export type VizResult = PlainResult | OrderByResult | WhereResult | WhereOrderByResult | JoinResult
 
 // Script types
 export interface Script {

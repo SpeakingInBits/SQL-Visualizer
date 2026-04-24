@@ -250,3 +250,4 @@
 }
 .sort-status-active { color: var(--yellow); }
 .sort-status-done   { color: var(--green); font-weight: 600; }
+.sort-status-ready  { color: var(--accent); font-style: italic; }
