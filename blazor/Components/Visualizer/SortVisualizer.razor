@@ -13,6 +13,7 @@
         <button @onclick="Reset">↺</button>
         <label>Speed
             <input type="range" min="1" max="10" @bind="_speed" @bind:event="oninput" />
+            <span class="speed-value">@_speed</span>
         </label>
         <span class="frame-counter">Step @_frame / @(_steps.Count - 1)</span>
     </div>

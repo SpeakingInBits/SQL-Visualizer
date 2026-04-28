@@ -301,20 +301,41 @@ public class QueryExecutorService
         // Fetch merged (joined) rows
         var (mergedCols, mergedRows) = FetchWithColumns(c, sql);
 
-        // Build match pairs: for each merged row find matching left/right row indices
+        // Build match pairs using ON-clause keys directly (most reliable approach)
         var matchPairs = new List<(int L, int R)>();
-        foreach (var mr in mergedRows)
+        if (leftKey != null && rightKey != null)
         {
             for (int li = 0; li < leftRows.Count; li++)
             {
+                if (!leftRows[li].TryGetValue(leftKey, out var lv)) continue;
                 for (int ri = 0; ri < rightRows.Count; ri++)
                 {
-                    if (RowsMatchJoin(mr, leftRows[li], leftCols, leftAlias) &&
-                        RowsMatchJoin(mr, rightRows[ri], rightCols, rightAlias))
+                    if (!rightRows[ri].TryGetValue(rightKey, out var rv)) continue;
+                    if (Equals(lv?.ToString(), rv?.ToString()))
                     {
                         var pair = (li, ri);
                         if (!matchPairs.Contains(pair))
                             matchPairs.Add(pair);
+                    }
+                }
+            }
+        }
+        else
+        {
+            // Fallback: correlate via merged rows
+            foreach (var mr in mergedRows)
+            {
+                for (int li = 0; li < leftRows.Count; li++)
+                {
+                    for (int ri = 0; ri < rightRows.Count; ri++)
+                    {
+                        if (RowsMatchJoin(mr, leftRows[li], leftCols, leftAlias) &&
+                            RowsMatchJoin(mr, rightRows[ri], rightCols, rightAlias))
+                        {
+                            var pair = (li, ri);
+                            if (!matchPairs.Contains(pair))
+                                matchPairs.Add(pair);
+                        }
                     }
                 }
             }
