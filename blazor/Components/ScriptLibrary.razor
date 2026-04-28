@@ -1,0 +1,128 @@
+@inject ScriptStoreService ScriptStore
+@inject ScriptRunnerService ScriptRunner
+@inject SqliteConnectionService ConnSvc
+
+<div class="script-library">
+    <div class="library-header">
+        <span>Script Library</span>
+        <label class="btn-upload">
+            Upload .sql
+            <InputFile OnChange="OnUpload" accept=".sql" style="display:none" />
+        </label>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="library-empty">Loading…</div>
+    }
+    else if (_scripts.Count == 0)
+    {
+        <div class="library-empty">No scripts saved. Upload a .sql file to get started.</div>
+    }
+    else
+    {
+        <ul class="script-list">
+            @foreach (var script in _scripts)
+            {
+                <li class="script-item">
+                    <div class="script-meta">
+                        <span class="script-name">@script.Name</span>
+                        <span class="script-date">@script.CreatedAt.ToString("yyyy-MM-dd")</span>
+                    </div>
+                    <div class="script-actions">
+                        <button class="btn-run" disabled="@(!ConnSvc.Status.Connected)"
+                                @onclick="() => RunScript(script)">▶ Run</button>
+                        <button class="btn-delete" @onclick="() => DeleteScript(script.Id)">🗑</button>
+                    </div>
+
+                    @if (_results.TryGetValue(script.Id, out var result))
+                    {
+                        <div class="script-results">
+                            @foreach (var stmt in result.Results)
+                            {
+                                <div class="stmt-result @(stmt.Ok ? "ok" : "err")">
+                                    <span class="stmt-badge @stmt.Type.ToLower()">@stmt.Type</span>
+                                    <span class="stmt-text">@stmt.Statement</span>
+                                    @if (!stmt.Ok)
+                                    {
+                                        <span class="stmt-error">@stmt.Error</span>
+                                    }
+                                    else if (stmt.Type == "DML")
+                                    {
+                                        <span class="stmt-rows">@stmt.RowsAffected rows affected</span>
+                                    }
+                                    else if (stmt.Rows != null)
+                                    {
+                                        <span class="stmt-rows">@stmt.Rows.Count rows</span>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </li>
+            }
+        </ul>
+    }
+
+    @if (_error != null)
+    {
+        <div class="error-msg">@_error</div>
+    }
+</div>
+
+@code {
+    private List<Script> _scripts = [];
+    private bool _loading = true;
+    private string? _error;
+    private readonly Dictionary<string, ScriptRunResult> _results = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _scripts = await ScriptStore.ListScriptsAsync();
+        _loading = false;
+    }
+
+    private async Task OnUpload(InputFileChangeEventArgs e)
+    {
+        _error = null;
+        var file = e.File;
+        if (!file.Name.EndsWith(".sql", StringComparison.OrdinalIgnoreCase))
+        {
+            _error = "Only .sql files are accepted.";
+            return;
+        }
+        try
+        {
+            using var sr = new System.IO.StreamReader(file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024));
+            var content = await sr.ReadToEndAsync();
+            var script = await ScriptStore.SaveScriptAsync(file.Name, content);
+            _scripts.Add(script);
+        }
+        catch (Exception ex)
+        {
+            _error = $"Upload failed: {ex.Message}";
+        }
+    }
+
+    private async Task DeleteScript(string id)
+    {
+        await ScriptStore.DeleteScriptAsync(id);
+        _results.Remove(id);
+        _scripts = await ScriptStore.ListScriptsAsync();
+    }
+
+    private async Task RunScript(Script script)
+    {
+        _error = null;
+        try
+        {
+            await ScriptStore.TouchScriptAsync(script.Id);
+            var result = ScriptRunner.Run(script);
+            _results[script.Id] = result;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+}

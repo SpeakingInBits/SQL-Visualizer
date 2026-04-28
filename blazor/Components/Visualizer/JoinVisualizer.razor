@@ -1,0 +1,114 @@
+@using Microsoft.AspNetCore.Components.Web
+
+<div class="join-visualizer">
+    <div class="viz-header">
+        <span class="viz-title">@Result.JoinType Visualisation</span>
+        <span class="viz-hint">ON <code>@Result.OnCondition</code></span>
+    </div>
+
+    <div class="join-layout">
+        @* Left table *@
+        <div class="join-side left-side">
+            <div class="side-title">@Result.LeftTable @(Result.LeftAlias != null ? $"({Result.LeftAlias})" : "")</div>
+            <table class="join-table">
+                <thead><tr>@foreach (var col in Result.LeftColumns) { <th>@col.Name</th> }</tr></thead>
+                <tbody>
+                    @for (int li = 0; li < Result.LeftRows.Count; li++)
+                    {
+                        var row = Result.LeftRows[li];
+                        bool isMatched = Result.MatchPairs.Any(p => p.L == li);
+                        <tr id="left-row-@li" class="join-row @(isMatched ? "matched" : "unmatched")"
+                            @onmouseenter="() => SetHover(li, -1)"
+                            @onmouseleave="() => SetHover(-1, -1)">
+                            @foreach (var col in Result.LeftColumns)
+                            {
+                                <td>@(row.TryGetValue(col.Name, out var v) ? v?.ToString() ?? "NULL" : "")</td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @* SVG connector lines *@
+        <div class="join-connectors">
+            <svg @ref="_svgRef" class="connector-svg" xmlns="http://www.w3.org/2000/svg">
+                @foreach (var pair in _activePairs)
+                {
+                    <line class="connector-line"
+                          x1="0%" y1="@GetRowCenterY("left", pair.L)px"
+                          x2="100%" y2="@GetRowCenterY("right", pair.R)px"
+                          stroke="var(--accent)" stroke-width="2" opacity="0.7" />
+                }
+            </svg>
+        </div>
+
+        @* Right table *@
+        <div class="join-side right-side">
+            <div class="side-title">@Result.RightTable @(Result.RightAlias != null ? $"({Result.RightAlias})" : "")</div>
+            <table class="join-table">
+                <thead><tr>@foreach (var col in Result.RightColumns) { <th>@col.Name</th> }</tr></thead>
+                <tbody>
+                    @for (int ri = 0; ri < Result.RightRows.Count; ri++)
+                    {
+                        var row = Result.RightRows[ri];
+                        bool isMatched = Result.MatchPairs.Any(p => p.R == ri);
+                        <tr id="right-row-@ri" class="join-row @(isMatched ? "matched" : "unmatched")"
+                            @onmouseenter="() => SetHover(-1, ri)"
+                            @onmouseleave="() => SetHover(-1, -1)">
+                            @foreach (var col in Result.RightColumns)
+                            {
+                                <td>@(row.TryGetValue(col.Name, out var v) ? v?.ToString() ?? "NULL" : "")</td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    @* Merged result *@
+    <div class="merged-result">
+        <div class="merged-title">Joined Result (@Result.MergedRows.Count rows)</div>
+        <div class="merged-table-wrap">
+            <table class="results-table">
+                <thead><tr>@foreach (var col in Result.MergedColumns) { <th>@col.Name</th> }</tr></thead>
+                <tbody>
+                    @foreach (var row in Result.MergedRows)
+                    {
+                        <tr>
+                            @foreach (var col in Result.MergedColumns)
+                            {
+                                <td>@(row.TryGetValue(col.Name, out var v) ? v?.ToString() ?? "NULL" : "")</td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public JoinResult Result { get; set; } = null!;
+
+    private ElementReference _svgRef;
+    private int _hoverLeft = -1;
+    private int _hoverRight = -1;
+
+    private List<(int L, int R)> _activePairs => _hoverLeft >= 0
+        ? Result.MatchPairs.Where(p => p.L == _hoverLeft).ToList()
+        : _hoverRight >= 0
+            ? Result.MatchPairs.Where(p => p.R == _hoverRight).ToList()
+            : Result.MatchPairs;
+
+    private void SetHover(int left, int right)
+    {
+        _hoverLeft = left;
+        _hoverRight = right;
+    }
+
+    // Approximate row center Y offset within the SVG (each row ~34px, header ~36px)
+    private double GetRowCenterY(string side, int rowIdx)
+        => 36 + rowIdx * 34 + 17;
+}

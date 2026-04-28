@@ -1,0 +1,45 @@
+﻿@page "/"
+@inject SqliteConnectionService ConnSvc
+
+<PageTitle>SQL Visualizer</PageTitle>
+
+<div class="app-layout">
+    <aside class="sidebar">
+        <div class="sidebar-brand">SQL Visualizer</div>
+
+        <ConnectionPanel OnConnectionChanged="OnConnectionChanged" />
+
+        <div class="sidebar-tabs">
+            <button class="stab @(_sideTab == "schema" ? "active" : "")"
+                    @onclick='() => _sideTab = "schema"'>Schema</button>
+            <button class="stab @(_sideTab == "scripts" ? "active" : "")"
+                    @onclick='() => _sideTab = "scripts"'>Scripts</button>
+        </div>
+
+        @if (_sideTab == "schema")
+        {
+            <SchemaBrowser Connected="_connected" />
+        }
+        else
+        {
+            <ScriptLibrary />
+        }
+    </aside>
+
+    <main class="main-content">
+        <QueryEditor OnVizResult="OnVizResult" />
+    </main>
+</div>
+
+@code {
+    private string _sideTab = "schema";
+    private bool _connected;
+
+    private void OnConnectionChanged()
+    {
+        _connected = ConnSvc.Status.Connected;
+        StateHasChanged();
+    }
+
+    private void OnVizResult(VizResult result) { }
+}

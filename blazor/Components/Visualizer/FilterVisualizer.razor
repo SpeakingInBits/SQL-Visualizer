@@ -1,0 +1,240 @@
+@implements IDisposable
+
+<div class="filter-visualizer">
+    <div class="viz-header">
+        <span class="viz-title">WHERE @(SortKeys != null ? "+ ORDER BY" : "") Visualisation</span>
+        <span class="viz-hint">Filter: <code>@WhereData.WhereText</code></span>
+    </div>
+
+    <div class="anim-controls">
+        <button @onclick="StepBack" disabled="@(_frame <= 0)">◀</button>
+        <button @onclick="TogglePlay">@(_playing ? "⏸" : "▶")</button>
+        <button @onclick="StepForward" disabled="@(_frame >= TotalFrames - 1)">▶</button>
+        <button @onclick="Reset">↺</button>
+        <label>Speed
+            <input type="range" min="1" max="10" @bind="_speed" @bind:event="oninput" />
+        </label>
+        <span class="frame-counter">Step @_frame / @(TotalFrames - 1)</span>
+        <span class="phase-label">Phase: @CurrentPhaseLabel</span>
+    </div>
+
+    @* Condition cards *@
+    @if (WhereData.Conditions.Count > 0)
+    {
+        <div class="condition-cards">
+            @for (int ci = 0; ci < WhereData.Conditions.Count; ci++)
+            {
+                var cIdx = ci;
+                <div class="condition-card">
+                    <span class="cond-text">@WhereData.Conditions[cIdx]</span>
+                    @if (_activeCondition == cIdx && _scanningRow >= 0 && _scanningRow < WhereData.AllRows.Count)
+                    {
+                        bool val = WhereData.ConditionResults.Count > cIdx &&
+                                   WhereData.ConditionResults[cIdx].Count > _scanningRow &&
+                                   WhereData.ConditionResults[cIdx][_scanningRow];
+                        <span class="cond-badge @(val ? "true" : "false")">@(val ? "TRUE" : "FALSE")</span>
+                    }
+                </div>
+            }
+        </div>
+    }
+
+    <div class="filter-table-wrap">
+        <table class="filter-table">
+            <thead>
+                <tr>@foreach (var col in WhereData.Columns) { <th>@col.Name</th> }</tr>
+            </thead>
+            <tbody>
+                @for (int ri = 0; ri < WhereData.AllRows.Count; ri++)
+                {
+                    var row = WhereData.AllRows[ri];
+                    string rowState = GetRowState(ri);
+                    <tr class="filter-row @rowState">
+                        @foreach (var col in WhereData.Columns)
+                        {
+                            <td>@(row.TryGetValue(col.Name, out var v) ? v?.ToString() ?? "NULL" : "")</td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @* Sort phase table (shown after WHERE phase completes) *@
+    @if (SortedRows != null && _phase == Phase.Sorting)
+    {
+        <div class="sort-phase-label">⬆ Sorting matched rows…</div>
+        <div class="sort-phase-table-wrap">
+            <table class="filter-table">
+                <thead>
+                    <tr>@foreach (var col in WhereData.Columns) { <th>@col.Name</th> }</tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in SortedRows)
+                    {
+                        <tr class="filter-row matched">
+                            @foreach (var col in WhereData.Columns)
+                            {
+                                <td>@(row.TryGetValue(col.Name, out var v) ? v?.ToString() ?? "NULL" : "")</td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public WhereResult WhereData { get; set; } = null!;
+    [Parameter] public List<Dictionary<string, object?>>? SortedRows { get; set; }
+    [Parameter] public List<int>? SortKeyIndices { get; set; }
+    [Parameter] public List<string>? SortKeys { get; set; }
+
+    private int _frame = 0;
+    private int _speed = 5;
+    private bool _playing = false;
+    private System.Threading.Timer? _timer;
+
+    // Animation state
+    private int _scanningRow = -1;
+    private int _activeCondition = -1;
+    private readonly Dictionary<int, string> _rowStates = new();
+
+    private enum Phase { Scanning, Sorting, Done }
+    private Phase _phase = Phase.Scanning;
+
+    // Frame layout:
+    //   0                              = initial (all pending)
+    //   1..N                           = scan row i (1 frame per row)
+    //   N+1..N+N*C                     = evaluate condition c for row i (C frames per row)
+    //   after all rows scanned: sort phase (1 frame)
+    private int TotalFrames =>
+        1 + WhereData.AllRows.Count * (1 + WhereData.Conditions.Count) +
+        (SortedRows != null ? 1 : 0);
+
+    private string CurrentPhaseLabel => _phase switch
+    {
+        Phase.Scanning => "WHERE scan",
+        Phase.Sorting  => "ORDER BY sort",
+        Phase.Done     => "Done",
+        _              => ""
+    };
+
+    protected override void OnParametersSet()
+    {
+        _frame = 0;
+        _playing = false;
+        _timer?.Dispose();
+        _rowStates.Clear();
+        _phase = Phase.Scanning;
+        _scanningRow = -1;
+        _activeCondition = -1;
+    }
+
+    private string GetRowState(int rowIdx)
+    {
+        if (_rowStates.TryGetValue(rowIdx, out var s)) return s;
+        return rowIdx == _scanningRow ? "scanning" : "pending";
+    }
+
+    private void ApplyFrame(int frame)
+    {
+        int n = WhereData.AllRows.Count;
+        int c = WhereData.Conditions.Count;
+        int scanFrames = n * (1 + c);   // rows * (1 scan + c condition frames)
+
+        if (frame == 0)
+        {
+            _rowStates.Clear();
+            _scanningRow = -1;
+            _activeCondition = -1;
+            _phase = Phase.Scanning;
+            return;
+        }
+
+        int f = frame - 1; // 0-based within scan phase
+        if (f < scanFrames)
+        {
+            _phase = Phase.Scanning;
+            int row  = f / (1 + c);
+            int step = f % (1 + c);     // 0 = scan, 1..c = evaluate condition step-1
+            _scanningRow = row;
+
+            if (step == 0)
+            {
+                _activeCondition = -1;
+                // Mark prior rows
+                for (int r = 0; r < row; r++)
+                    _rowStates[r] = WhereData.MatchMask[r] ? "matched" : "rejected";
+            }
+            else
+            {
+                _activeCondition = step - 1;
+            }
+        }
+        else
+        {
+            // All rows evaluated
+            for (int r = 0; r < n; r++)
+                _rowStates[r] = WhereData.MatchMask[r] ? "matched" : "rejected";
+            _scanningRow = -1;
+            _activeCondition = -1;
+
+            if (SortedRows != null)
+                _phase = Phase.Sorting;
+            else
+                _phase = Phase.Done;
+        }
+    }
+
+    private void TogglePlay()
+    {
+        _playing = !_playing;
+        if (_playing)
+        {
+            int intervalMs = Math.Max(100, 1100 - _speed * 100);
+            _timer = new System.Threading.Timer(_ =>
+            {
+                InvokeAsync(() =>
+                {
+                    if (_frame < TotalFrames - 1)
+                    {
+                        _frame++;
+                        ApplyFrame(_frame);
+                    }
+                    else
+                    {
+                        _playing = false;
+                        _timer?.Dispose();
+                    }
+                    StateHasChanged();
+                });
+            }, null, intervalMs, intervalMs);
+        }
+        else
+        {
+            _timer?.Dispose();
+        }
+    }
+
+    private void StepForward()
+    {
+        if (_frame < TotalFrames - 1) { _frame++; ApplyFrame(_frame); }
+    }
+
+    private void StepBack()
+    {
+        if (_frame > 0) { _frame--; ApplyFrame(_frame); }
+    }
+
+    private void Reset()
+    {
+        _playing = false;
+        _timer?.Dispose();
+        _frame = 0;
+        ApplyFrame(0);
+    }
+
+    public void Dispose() { _timer?.Dispose(); }
+}
