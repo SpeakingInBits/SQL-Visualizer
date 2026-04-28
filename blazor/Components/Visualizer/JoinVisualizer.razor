@@ -81,18 +81,21 @@
         </div>
     </div>
 
-    @* Merged result — revealed at the final frame *@
-    @if (_frame == TotalFrames - 1 && Result.MergedRows.Count > 0)
+    @* Merged result — grows row by row as animation plays *@
+    @if (_frame > 0 && Result.MergedRows.Count > 0)
     {
+        var visibleCount = Math.Min(_frame, Result.MergedRows.Count);
         <div class="merged-result">
-            <div class="merged-title">Joined Result (@Result.MergedRows.Count rows)</div>
+            <div class="merged-title">Joined Result (@visibleCount / @Result.MergedRows.Count rows)</div>
             <div class="merged-table-wrap">
                 <table class="results-table">
                     <thead><tr>@foreach (var col in Result.MergedColumns) { <th>@col.Name</th> }</tr></thead>
                     <tbody>
-                        @foreach (var row in Result.MergedRows)
+                        @for (int i = 0; i < visibleCount; i++)
                         {
-                            <tr>
+                            var row = Result.MergedRows[i];
+                            bool isNew = i == visibleCount - 1;
+                            <tr class="@(isNew ? "merged-row-new" : "")">
                                 @foreach (var col in Result.MergedColumns)
                                 {
                                     <td>@(row.TryGetValue(col.Name, out var v) ? v?.ToString() ?? "NULL" : "")</td>
