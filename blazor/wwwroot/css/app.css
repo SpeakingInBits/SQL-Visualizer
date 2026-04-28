@@ -78,12 +78,12 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .browser-header { font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); padding: 4px 14px 8px; }
 .browser-empty  { padding: 12px 14px; color: var(--muted); font-size: 13px; }
 .table-list { list-style: none; }
-.table-item { cursor: pointer; }
-.table-item > span { display: block; padding: 6px 14px; font-size: 13px; }
-.table-item:hover > span:first-of-type { background: rgba(255,255,255,.04); }
-.table-item.open > span:first-of-type { color: var(--accent); }
-.table-icon { margin-right: 6px; }
-.column-list { list-style: none; background: rgba(0,0,0,.15); padding: 4px 0; }
+.table-item { cursor: pointer; display: flex; flex-wrap: wrap; align-items: center; padding: 6px 14px; font-size: 13px; }
+.table-item:hover { background: rgba(255,255,255,.04); }
+.table-item.open .table-icon,
+.table-item.open .table-name { color: var(--accent); }
+.table-icon { margin-right: 4px; }
+.column-list { list-style: none; background: rgba(0,0,0,.15); padding: 4px 0; flex: 0 0 100%; }
 .column-item { display: flex; align-items: center; gap: 6px; padding: 4px 20px 4px 28px; font-size: 12px; }
 .col-icon { width: 16px; text-align: center; }
 .col-name { flex: 1; }
@@ -114,7 +114,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .editor-toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--surface); }
 .loading-hint { color: var(--muted); font-size: 12px; }
 .query-error  { color: var(--red); font-size: 12px; }
-.monaco-wrapper { height: 220px; flex-shrink: 0; border-bottom: 1px solid var(--border); }
+.monaco-wrapper { height: 220px; flex-shrink: 0; border-bottom: 1px solid var(--border); position: relative; overflow: hidden; }
+.monaco-editor-container { width: 100%; height: 100%; }
 .results-area { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
 .result-tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--surface); }
 .tab { padding: 7px 16px; background: none; border: none; border-bottom: 2px solid transparent; color: var(--muted); font-size: 13px; cursor: pointer; }

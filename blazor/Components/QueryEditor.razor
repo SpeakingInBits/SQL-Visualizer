@@ -5,8 +5,8 @@
 
 <div class="query-editor">
     <div class="editor-toolbar">
-        <button class="btn-run" disabled="@(!ConnSvc.Status.Connected)" @onclick="RunQuery">▶ Run</button>
-        <button class="btn-visualize" disabled="@(!ConnSvc.Status.Connected)" @onclick="VisualizeQuery">⚡ Visualize</button>
+        <button class="btn-run" disabled="@(!Connected)" @onclick="RunQuery">▶ Run</button>
+        <button class="btn-visualize" disabled="@(!Connected)" @onclick="VisualizeQuery">⚡ Visualize</button>
         @if (_loading) { <span class="loading-hint">Running…</span> }
         @if (_error != null) { <span class="query-error">@_error</span> }
     </div>
@@ -68,6 +68,7 @@
 
 @code {
     [Parameter] public EventCallback<VizResult> OnVizResult { get; set; }
+    [Parameter] public bool Connected { get; set; }
 
     private StandaloneCodeEditor? _editor;
     private PlainResult? _plainResult;
