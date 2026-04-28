@@ -1,0 +1,145 @@
+@using BlazorMonaco
+@using BlazorMonaco.Editor
+@inject QueryExecutorService Executor
+@inject SqliteConnectionService ConnSvc
+
+<div class="query-editor">
+    <div class="editor-toolbar">
+        <button class="btn-run" disabled="@(!Connected)" @onclick="RunQuery">▶ Run</button>
+        <button class="btn-visualize" disabled="@(!Connected)" @onclick="VisualizeQuery">⚡ Visualize</button>
+        @if (_loading) { <span class="loading-hint">Running…</span> }
+        @if (_error != null) { <span class="query-error">@_error</span> }
+    </div>
+
+    <div class="monaco-wrapper">
+        <StandaloneCodeEditor @ref="_editor"
+                              Id="sql-editor"
+                              ConstructionOptions="EditorOptions"
+                              OnKeyDown="OnKeyDown" />
+    </div>
+
+    <div class="results-area">
+        <div class="result-tabs">
+            <button class="tab @(_tab == "results" ? "active" : "")" @onclick='() => _tab = "results"'>Results</button>
+            <button class="tab @(_tab == "visualizer" ? "active" : "")"
+                    disabled="@(_vizResult == null)"
+                    @onclick='() => _tab = "visualizer"'>Visualizer</button>
+        </div>
+
+        @if (_tab == "results" && _plainResult != null)
+        {
+            @if (_plainResult.Type == "DML")
+            {
+                <div class="dml-result">✓ @_plainResult.RowsAffected rows affected.</div>
+            }
+            else
+            {
+                @if (_plainResult.Truncated)
+                {
+                    <div class="truncation-warning">⚠ Results truncated to 200 rows.</div>
+                }
+                <div class="results-table-wrap">
+                    <table class="results-table">
+                        <thead>
+                            <tr>@foreach (var col in _plainResult.Columns) { <th>@col.Name</th> }</tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in _plainResult.Rows)
+                            {
+                                <tr>
+                                    @foreach (var col in _plainResult.Columns)
+                                    {
+                                        <td>@(row.TryGetValue(col.Name, out var v) ? v?.ToString() ?? "NULL" : "")</td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+
+        @if (_tab == "visualizer" && _vizResult != null)
+        {
+            <Visualizer Result="_vizResult" />
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback<VizResult> OnVizResult { get; set; }
+    [Parameter] public bool Connected { get; set; }
+
+    private StandaloneCodeEditor? _editor;
+    private PlainResult? _plainResult;
+    private VizResult? _vizResult;
+    private bool _loading;
+    private string? _error;
+    private string _tab = "results";
+
+    private StandaloneEditorConstructionOptions EditorOptions(StandaloneCodeEditor _) =>
+        new()
+        {
+            Language = "sql",
+            Theme = "vs-dark",
+            Value = "SELECT * FROM students LIMIT 10;",
+            Minimap = new EditorMinimapOptions { Enabled = false },
+            FontFamily = "JetBrains Mono, Cascadia Code, Consolas, monospace",
+            FontSize = 14,
+            ScrollBeyondLastLine = false,
+            AutomaticLayout = true
+        };
+
+    private async Task OnKeyDown(KeyboardEvent e)
+    {
+        // Ctrl+Enter → Run
+        if (e.CtrlKey && e.Code == "Enter")
+            await RunQuery();
+    }
+
+    private async Task<string?> GetSql()
+    {
+        if (_editor == null) return null;
+        // Check for selection first; fall back to full content
+        var selection = await _editor.GetSelection();
+        if (selection != null && (selection.StartLineNumber != selection.EndLineNumber ||
+                                   selection.StartColumn != selection.EndColumn))
+        {
+            var model = await _editor.GetModel();
+            if (model != null)
+                return await model.GetValueInRange(selection, EndOfLinePreference.LF);
+        }
+        return await _editor.GetValue();
+    }
+
+    private async Task RunQuery()
+    {
+        var sql = await GetSql();
+        if (string.IsNullOrWhiteSpace(sql)) return;
+        _loading = true; _error = null; _plainResult = null;
+        StateHasChanged();
+        try
+        {
+            _plainResult = Executor.RunStatement(sql);
+            _tab = "results";
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private async Task VisualizeQuery()
+    {
+        var sql = await GetSql();
+        if (string.IsNullOrWhiteSpace(sql)) return;
+        _loading = true; _error = null; _vizResult = null;
+        StateHasChanged();
+        try
+        {
+            _vizResult = Executor.VisualizeQuery(sql);
+            _tab = "visualizer";
+            await OnVizResult.InvokeAsync(_vizResult);
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+}

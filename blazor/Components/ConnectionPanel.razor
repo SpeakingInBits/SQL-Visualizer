@@ -1,0 +1,138 @@
+@inject SqliteConnectionService ConnSvc
+@inject SampleDatabaseService SampleSvc
+@inject IJSRuntime JS
+
+<div class="connection-panel @(Collapsed ? "collapsed" : "")">
+    <div class="panel-header" @onclick="ToggleCollapse">
+        <span class="panel-title">🔌 Connection</span>
+        @if (ConnSvc.Status.Connected)
+        {
+            <span class="conn-badge connected">@ConnSvc.Status.DisplayName</span>
+        }
+        <span class="collapse-icon">@(Collapsed ? "▸" : "▾")</span>
+    </div>
+
+    @if (!Collapsed)
+    {
+        <div class="panel-body">
+            @if (ConnSvc.Status.Connected)
+            {
+                <div class="conn-active">
+                    <span>Connected to <strong>@ConnSvc.Status.DisplayName</strong></span>
+                    <button class="btn-disconnect" @onclick="Disconnect">Disconnect</button>
+                </div>
+            }
+            else
+            {
+                <div class="conn-form">
+                    <div class="form-group">
+                        <label>SQLite File</label>
+                        <div class="file-row">
+                            <span class="file-name">@(_selectedFileName ?? "No file selected")</span>
+                            <button class="btn-secondary" @onclick="TriggerFilePicker">Browse…</button>
+                            <InputFile @ref="_inputFile" OnChange="OnFileChanged" accept=".db,.sqlite,.sqlite3"
+                                       style="display:none" />
+                        </div>
+                        @if (_selectedBytes != null)
+                        {
+                            <button class="btn-primary" @onclick="ConnectFile">Connect</button>
+                        }
+                    </div>
+
+                    <div class="divider"><span>or open a sample</span></div>
+
+                    <div class="sample-buttons">
+                        @foreach (var (name, label) in SampleSvc.Samples)
+                        {
+                            <button class="btn-sample" @onclick="() => OpenSample(name)">@label</button>
+                        }
+                    </div>
+
+                    @if (_error != null)
+                    {
+                        <div class="error-msg">@_error</div>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public EventCallback OnConnectionChanged { get; set; }
+
+    private bool Collapsed { get; set; } = false;
+    private string? _selectedFileName;
+    private byte[]? _selectedBytes;
+    private string? _error;
+    private InputFile? _inputFile;
+
+    private void ToggleCollapse() => Collapsed = !Collapsed;
+
+    private async Task TriggerFilePicker()
+    {
+        // Use ElementReference to trigger the hidden <input type=file>
+        if (_inputFile?.Element != null)
+            await JS.InvokeVoidAsync("SqlVis.triggerClick", _inputFile.Element);
+    }
+
+    private async Task OnFileChanged(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        _selectedFileName = file.Name;
+        _selectedBytes = null;
+        _error = null;
+
+        try
+        {
+            using var ms = new MemoryStream();
+            await using var stream = file.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024); // 50 MB
+            await stream.CopyToAsync(ms);
+            _selectedBytes = ms.ToArray();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Could not read file: {ex.Message}";
+        }
+    }
+
+    private async Task ConnectFile()
+    {
+        if (_selectedBytes == null || _selectedFileName == null) return;
+        _error = null;
+        try
+        {
+            ConnSvc.OpenFromBytes(_selectedBytes, _selectedFileName);
+            Collapsed = true;
+            await OnConnectionChanged.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task OpenSample(string name)
+    {
+        _error = null;
+        try
+        {
+            SampleSvc.OpenSample(name);
+            Collapsed = true;
+            await OnConnectionChanged.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task Disconnect()
+    {
+        ConnSvc.Close();
+        _selectedFileName = null;
+        _selectedBytes = null;
+        Collapsed = false;
+        await OnConnectionChanged.InvokeAsync();
+    }
+}

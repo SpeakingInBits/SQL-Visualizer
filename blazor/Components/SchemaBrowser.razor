@@ -1,0 +1,88 @@
+@inject SchemaService SchemaSvc
+@inject SqliteConnectionService ConnSvc
+
+<div class="schema-browser">
+    <div class="browser-header">Schema</div>
+
+    @if (!ConnSvc.Status.Connected)
+    {
+        <div class="browser-empty">Not connected.</div>
+    }
+    else if (_tables == null)
+    {
+        <div class="browser-empty">Loading…</div>
+    }
+    else if (_tables.Count == 0)
+    {
+        <div class="browser-empty">No tables found.</div>
+    }
+    else
+    {
+        <ul class="table-list">
+            @foreach (var table in _tables)
+            {
+                <li class="table-item @(_expanded == table.Name ? "open" : "")"
+                    @onclick="() => ToggleTable(table.Name)">
+                    <span class="table-icon">📋</span>
+                    <span class="table-name">@table.Name</span>
+
+                    @if (_expanded == table.Name && _columnsCache.TryGetValue(table.Name, out var cr))
+                    {
+                        <ul class="column-list" @onclick:stopPropagation>
+                            @foreach (var col in cr.Columns)
+                            {
+                                <li class="column-item">
+                                    <span class="col-icon">
+                                        @if (col.IsPrimaryKey) { <span title="Primary Key">🔑</span> }
+                                        else if (col.IsForeignKey) { <span title="Foreign Key">🔗</span> }
+                                        else { <span>·</span> }
+                                    </span>
+                                    <span class="col-name">@col.Name</span>
+                                    <span class="col-type">@col.DataType</span>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </li>
+            }
+        </ul>
+    }
+</div>
+
+@code {
+    [Parameter] public bool Connected { get; set; }
+
+    private List<TableRef>? _tables;
+    private string? _expanded;
+    private readonly Dictionary<string, ColumnsResponse> _columnsCache = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Connected && ConnSvc.Status.Connected)
+            await LoadTables();
+        else
+        {
+            _tables = null;
+            _expanded = null;
+            _columnsCache.Clear();
+        }
+    }
+
+    private Task LoadTables()
+    {
+        try { _tables = SchemaSvc.ListTables(); }
+        catch { _tables = []; }
+        return Task.CompletedTask;
+    }
+
+    private async Task ToggleTable(string name)
+    {
+        if (_expanded == name) { _expanded = null; return; }
+        _expanded = name;
+        if (!_columnsCache.ContainsKey(name))
+        {
+            try { _columnsCache[name] = SchemaSvc.GetColumns(name); }
+            catch { _columnsCache[name] = new ColumnsResponse([], []); }
+        }
+    }
+}

@@ -1,21 +1,24 @@
 # SQL Visualizer
 
-An interactive desktop app for teaching SQL. Connect to a local SQL Server or SQLite database, write queries, and watch **sorting**, **filtering**, and **joins** animate step by step.
+An interactive web app for teaching SQL. Open a SQLite database directly in your browser, write queries, and watch **sorting**, **filtering**, and **joins** animate step by step — no server required.
+
+Built with [Blazor WebAssembly](https://learn.microsoft.com/en-us/aspnet/core/blazor/), runs entirely in the browser as a static site.
 
 ---
 
 ## Features
 
-- **Connection manager** — SQL Server (SQL auth or Windows Authentication) and SQLite
-- **Schema browser** — tree view of databases → tables → columns with PK / FK indicators
-- **Query editor** — Monaco (VS Code) editor with SQL syntax highlighting
+- **Connection manager** — open any SQLite `.db` file via the file picker, or load a built-in sample database
+- **Schema browser** — tree view of tables → columns with PK / FK indicators
+- **Query editor** — Monaco (VS Code) editor with SQL syntax highlighting; `Ctrl+Enter` to run
 - **Run** any statement — SELECT, INSERT, UPDATE, DELETE; DML shows rows-affected feedback
 - **Visualize** SELECT queries:
-  - `ORDER BY` — rows slide into their sorted positions (FLIP animation)
-  - `WHERE` — non-matching rows fade and slide out; matching rows highlight
-  - `JOIN` — animated SVG connectors between matched rows, then merged result fades in
-- **Step-through controls** — Prev / Next / Reset for teacher-led demos
-- **Script library** — upload `.sql` files, save them, and re-run to recreate databases on demand
+  - `ORDER BY` — rows animate into their sorted positions step by step
+  - `WHERE` — rows are scanned, each AND condition evaluated individually, non-matching rows crossed out
+  - `WHERE + ORDER BY` — filter phase followed by sort phase
+  - `JOIN` — SVG connectors between matched rows from each table, then the merged result
+- **Step-through controls** — Prev / Next / Play / Reset for teacher-led demos
+- **Script library** — upload `.sql` files, save them to browser storage, and re-run on demand
 
 ---
 
@@ -23,84 +26,84 @@ An interactive desktop app for teaching SQL. Connect to a local SQL Server or SQ
 
 | Requirement | Notes |
 |---|---|
-| Python 3.11+ | [python.org](https://www.python.org/downloads/) |
-| Node.js 20+ | [nodejs.org](https://nodejs.org/) |
-| ODBC Driver 17 or 18 for SQL Server | [Microsoft docs](https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server) — only needed for SQL Server connections |
+| [.NET 10 SDK](https://dotnet.microsoft.com/download) | Preview or later |
+| `wasm-tools` workload | Run `dotnet workload install wasm-tools` once after installing the SDK |
+
+No Node.js, Python, or database server required.
 
 ---
 
-## Quick start — development mode
-
-Both the FastAPI backend and the Vite dev server run concurrently. The frontend proxies all `/api` requests to the backend automatically.
-
-**1. Install dependencies (first time only)**
+## Quick start
 
 ```bash
-# Python backend
-cd backend
-pip install -r requirements.txt
-cd ..
-
-# React frontend
-cd frontend
-npm install
-cd ..
+cd blazor
+dotnet run
 ```
 
-**2. Start both servers**
-
-```bash
-python build.py --dev
-```
-
-- Backend → [http://127.0.0.1:8000](http://127.0.0.1:8000)
-- Frontend → [http://localhost:5173](http://localhost:5173)
-
-Open [http://localhost:5173](http://localhost:5173) in your browser.
-
-> Alternatively, start them separately:
-> ```bash
-> # Terminal 1
-> cd backend && uvicorn main:app --reload --port 8000
->
-> # Terminal 2
-> cd frontend && npm run dev
-> ```
+Then open [http://localhost:5000](http://localhost:5000) in your browser.
 
 ---
 
-## Package as a standalone executable
-
-The build script compiles the React app, bundles it into the backend, then wraps everything into a single executable with PyInstaller.
-
-**1. Install PyInstaller (first time only)**
+## Deploy as a static site
 
 ```bash
-pip install pyinstaller
+cd blazor
+dotnet publish -c Release -o publish
 ```
 
-**2. Run the build**
+Copy the contents of `publish/wwwroot/` to any static host (GitHub Pages, Netlify, Azure Static Web Apps, etc.). No server-side component is needed.
 
-```bash
-python build.py
+---
+
+## Project structure
+
+```
+SQL-Visualizer/
+└── blazor/
+    ├── SqlVisualizer.csproj
+    ├── Program.cs                    # DI registration + WASM host setup
+    ├── _Imports.razor                # Global using directives
+    ├── App.razor / Layout/           # Root component and shell layout
+    ├── Models/
+    │   └── Models.cs                 # Shared C# record types (results, schema, scripts)
+    ├── Services/
+    │   ├── SqliteConnectionService.cs   # Open SQLite from file bytes or in-memory
+    │   ├── SampleDatabaseService.cs     # Seeds school.db and store.db in-memory
+    │   ├── SchemaService.cs             # PRAGMA-based table/column introspection
+    │   ├── QueryExecutorService.cs      # RunStatement + VisualizeQuery (all viz types)
+    │   ├── ScriptRunnerService.cs       # Multi-statement script execution
+    │   └── ScriptStoreService.cs        # Script persistence via browser localStorage
+    ├── Components/
+    │   ├── ConnectionPanel.razor
+    │   ├── SchemaBrowser.razor
+    │   ├── QueryEditor.razor
+    │   ├── ScriptLibrary.razor
+    │   └── Visualizer/
+    │       ├── Visualizer.razor          # Dispatches to the correct sub-visualizer
+    │       ├── SortVisualizer.razor      # ORDER BY step animation
+    │       ├── FilterVisualizer.razor    # WHERE scan + optional ORDER BY sort
+    │       └── JoinVisualizer.razor      # JOIN with SVG connector lines
+    ├── Pages/
+    │   └── Home.razor                # Single-page shell
+    └── wwwroot/
+        ├── index.html
+        ├── css/app.css
+        └── js/sqlvis.js              # JS interop helpers (file picker, localStorage)
 ```
 
-This does three things:
-1. `npm run build` inside `frontend/` → produces `frontend/dist/`
-2. Copies `frontend/dist/` → `backend/static/`
-3. Runs PyInstaller `--onefile` on `backend/main.py`
+---
 
-**Output:** `backend/dist/sql-visualizer` (or `sql-visualizer.exe` on Windows)
+## Sample databases
 
-**3. Run the executable**
+Two in-memory sample databases are included and require no external files:
 
-```bash
-# Windows
-backend\dist\sql-visualizer.exe
+| Name | Tables | Good for |
+|---|---|---|
+| `school.db` | `students`, `courses`, `enrollments` | ORDER BY, WHERE, INNER JOIN demos |
+| `store.db` | `categories`, `products`, `orders` | Aggregates, JOINs, multi-condition WHERE |
 
-# macOS / Linux
-./backend/dist/sql-visualizer
-```
+Select either from the connection panel — no file picker needed.
+
 
 The app starts the server on port 8000 and automatically opens your default browser.
 

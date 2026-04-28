@@ -1,0 +1,30 @@
+@if (Result is PlainResult plain)
+{
+    @* Plain results are shown directly in QueryEditor; nothing extra to render *@
+    <div class="viz-plain">
+        <p>Plain query — no special visualisation. Results shown in the Results tab.</p>
+    </div>
+}
+else if (Result is OrderByResult orderBy)
+{
+    <SortVisualizer Result="orderBy" />
+}
+else if (Result is WhereResult where)
+{
+    <FilterVisualizer WhereData="where" SortedRows="null" SortKeyIndices="null" SortKeys="null" />
+}
+else if (Result is WhereOrderByResult whereOrder)
+{
+    <FilterVisualizer WhereData="@(new WhereResult(whereOrder.Columns, whereOrder.AllRows, whereOrder.MatchMask, whereOrder.WhereText, whereOrder.Conditions, whereOrder.ConditionResults))"
+                      SortedRows="whereOrder.SortedRows"
+                      SortKeyIndices="whereOrder.SortKeyIndices"
+                      SortKeys="whereOrder.SortKeys" />
+}
+else if (Result is JoinResult join)
+{
+    <JoinVisualizer Result="join" />
+}
+
+@code {
+    [Parameter, EditorRequired] public VizResult Result { get; set; } = null!;
+}
