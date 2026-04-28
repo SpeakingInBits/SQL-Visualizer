@@ -7,9 +7,9 @@
     </div>
 
     <div class="anim-controls">
-        <button @onclick="StepBack" disabled="@(_frame <= 0)">◀</button>
+        <button class="btn-step" @onclick="StepBack" disabled="@(_frame <= 0)">⏮</button>
         <button @onclick="TogglePlay">@(_playing ? "⏸" : "▶")</button>
-        <button @onclick="StepForward" disabled="@(_frame >= _steps.Count - 1)">▶</button>
+        <button class="btn-step" @onclick="StepForward" disabled="@(_frame >= _steps.Count - 1)">⏭</button>
         <button @onclick="Reset">↺</button>
         <label>Speed
             <input type="range" min="1" max="10" @bind="_speed" @bind:event="oninput" />

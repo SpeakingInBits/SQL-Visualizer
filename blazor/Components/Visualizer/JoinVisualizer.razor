@@ -1,4 +1,5 @@
 @implements IDisposable
+@inject IJSRuntime JS
 
 <div class="join-visualizer">
     <div class="viz-header">
@@ -7,9 +8,9 @@
     </div>
 
     <div class="anim-controls">
-        <button @onclick="StepBack" disabled="@(_frame <= 0)">◀</button>
+        <button class="btn-step" @onclick="StepBack" disabled="@(_frame <= 0)">⏮</button>
         <button @onclick="TogglePlay">@(_playing ? "⏸" : "▶")</button>
-        <button @onclick="StepForward" disabled="@(_frame >= TotalFrames - 1)">▶</button>
+        <button class="btn-step" @onclick="StepForward" disabled="@(_frame >= TotalFrames - 1)">⏭</button>
         <button @onclick="Reset">↺</button>
         <label>Speed
             <input type="range" min="1" max="10" @bind="_speed" @bind:event="oninput" />
@@ -22,36 +23,36 @@
         @* Left table *@
         <div class="join-side left-side">
             <div class="side-title">@Result.LeftTable @(Result.LeftAlias != null ? $"({Result.LeftAlias})" : "")</div>
-            <table class="join-table">
-                <thead><tr>@foreach (var col in Result.LeftColumns) { <th>@col.Name</th> }</tr></thead>
-                <tbody>
-                    @for (int li = 0; li < Result.LeftRows.Count; li++)
-                    {
-                        var row = Result.LeftRows[li];
-                        var state = GetLeftRowState(li);
-                        <tr class="join-row @state">
-                            @foreach (var col in Result.LeftColumns)
-                            {
-                                <td>@(row.TryGetValue(col.Name, out var v) ? v?.ToString() ?? "NULL" : "")</td>
-                            }
-                        </tr>
-                    }
-                </tbody>
-            </table>
+            <div class="join-table-scroll">
+                <table class="join-table">
+                    <thead><tr>@foreach (var col in Result.LeftColumns) { <th>@col.Name</th> }</tr></thead>
+                    <tbody>
+                        @for (int li = 0; li < Result.LeftRows.Count; li++)
+                        {
+                            var row = Result.LeftRows[li];
+                            var state = GetLeftRowState(li);
+                            <tr id="left-row-@li" class="join-row @state">
+                                @foreach (var col in Result.LeftColumns)
+                                {
+                                    <td>@(row.TryGetValue(col.Name, out var v) ? v?.ToString() ?? "NULL" : "")</td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
         </div>
 
-        @* SVG connector lines *@
+        @* SVG connector — only the current pair, drawn as a bezier curve *@
         <div class="join-connectors">
-            <svg class="connector-svg" xmlns="http://www.w3.org/2000/svg">
-                @for (int i = 0; i < _frame && i < Result.MatchPairs.Count; i++)
+            <svg id="join-connector-svg" class="connector-svg" xmlns="http://www.w3.org/2000/svg">
+                @if (_pathReady)
                 {
-                    var pair = Result.MatchPairs[i];
-                    bool isActive = i == _frame - 1;
-                    <line x1="0%" y1="@(GetRowCenterY(pair.L))px"
-                          x2="100%" y2="@(GetRowCenterY(pair.R))px"
-                          stroke="@(isActive ? "var(--accent)" : "var(--green)")"
-                          stroke-width="@(isActive ? "2.5" : "1.5")"
-                          opacity="@(isActive ? "0.9" : "0.5")" />
+                    <path d="M 0,@_pathLeftY C 40,@_pathLeftY 40,@_pathRightY 80,@_pathRightY"
+                          fill="none"
+                          stroke="var(--accent)"
+                          stroke-width="2.5"
+                          opacity="0.9" />
                 }
             </svg>
         </div>
@@ -59,22 +60,24 @@
         @* Right table *@
         <div class="join-side right-side">
             <div class="side-title">@Result.RightTable @(Result.RightAlias != null ? $"({Result.RightAlias})" : "")</div>
-            <table class="join-table">
-                <thead><tr>@foreach (var col in Result.RightColumns) { <th>@col.Name</th> }</tr></thead>
-                <tbody>
-                    @for (int ri = 0; ri < Result.RightRows.Count; ri++)
-                    {
-                        var row = Result.RightRows[ri];
-                        var state = GetRightRowState(ri);
-                        <tr class="join-row @state">
-                            @foreach (var col in Result.RightColumns)
-                            {
-                                <td>@(row.TryGetValue(col.Name, out var v) ? v?.ToString() ?? "NULL" : "")</td>
-                            }
-                        </tr>
-                    }
-                </tbody>
-            </table>
+            <div class="join-table-scroll">
+                <table class="join-table">
+                    <thead><tr>@foreach (var col in Result.RightColumns) { <th>@col.Name</th> }</tr></thead>
+                    <tbody>
+                        @for (int ri = 0; ri < Result.RightRows.Count; ri++)
+                        {
+                            var row = Result.RightRows[ri];
+                            var state = GetRightRowState(ri);
+                            <tr id="right-row-@ri" class="join-row @state">
+                                @foreach (var col in Result.RightColumns)
+                                {
+                                    <td>@(row.TryGetValue(col.Name, out var v) ? v?.ToString() ?? "NULL" : "")</td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 
@@ -109,28 +112,56 @@
     private int _frame = 0;
     private int _speed = 5;
     private bool _playing = false;
+    private bool _measurePending = false;
+    private bool _pathReady = false;
+    private double _pathLeftY = 0;
+    private double _pathRightY = 0;
     private System.Threading.Timer? _timer;
 
-    // Frame 0 = initial (nothing highlighted), frames 1..M reveal one pair each
+    private record ConnectorYs(double LeftY, double RightY);
+
     private int TotalFrames => Result.MatchPairs.Count + 1;
 
     protected override void OnParametersSet()
     {
         _frame = 0;
         _playing = false;
+        _measurePending = false;
+        _pathReady = false;
         _timer?.Dispose();
         _timer = null;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_frame > 0 && _frame <= Result.MatchPairs.Count)
+        {
+            var pair = Result.MatchPairs[_frame - 1];
+            var ys = await JS.InvokeAsync<ConnectorYs?>("SqlVis.scrollAndMeasureConnector",
+                $"left-row-{pair.L}", $"right-row-{pair.R}", "join-connector-svg");
+            if (ys != null)
+            {
+                bool changed = !_pathReady ||
+                    Math.Abs(ys.LeftY  - _pathLeftY)  > 0.5 ||
+                    Math.Abs(ys.RightY - _pathRightY) > 0.5;
+                _pathLeftY  = ys.LeftY;
+                _pathRightY = ys.RightY;
+                _pathReady  = true;
+                if (changed) StateHasChanged();
+            }
+        }
+        else
+        {
+            if (_pathReady) { _pathReady = false; StateHasChanged(); }
+        }
     }
 
     private string GetLeftRowState(int rowIdx)
     {
         if (_frame == 0) return "";
-        // Active pair (currently being revealed)
         if (Result.MatchPairs[_frame - 1].L == rowIdx) return "active";
-        // Previously revealed pairs
         for (int i = 0; i < _frame - 1; i++)
             if (Result.MatchPairs[i].L == rowIdx) return "matched";
-        // Final frame: unmatched rows are dimmed
         if (_frame == TotalFrames - 1) return "unmatched";
         return "";
     }
@@ -144,9 +175,6 @@
         if (_frame == TotalFrames - 1) return "unmatched";
         return "";
     }
-
-    // Approximates row centre Y within the SVG (header ≈36px, row ≈34px)
-    private static double GetRowCenterY(int rowIdx) => 36 + rowIdx * 34 + 17;
 
     private void TogglePlay()
     {
