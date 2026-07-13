@@ -49,11 +49,11 @@
                                     }
                                     else if (stmt.Type == "DML")
                                     {
-                                        <span class="stmt-rows">@stmt.RowsAffected rows affected</span>
+                                        <span class="stmt-rows">@stmt.RowsAffected @(stmt.RowsAffected == 1 ? "row" : "rows") affected</span>
                                     }
                                     else if (stmt.Rows != null)
                                     {
-                                        <span class="stmt-rows">@stmt.Rows.Count rows</span>
+                                        <span class="stmt-rows">@stmt.Rows.Count @(stmt.Rows.Count == 1 ? "row" : "rows")</span>
                                     }
                                 </div>
                             }

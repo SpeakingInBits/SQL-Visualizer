@@ -44,5 +44,12 @@ window.SqlVis = {
     scrollIntoView: function (id) {
         const el = document.getElementById(id);
         if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    },
+
+    /** Return an element's viewport rectangle {left, top, width, height}. */
+    getRect: function (element) {
+        if (!element) return null;
+        const r = element.getBoundingClientRect();
+        return { left: r.left, top: r.top, width: r.width, height: r.height };
     }
 };

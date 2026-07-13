@@ -35,13 +35,52 @@ public class QueryExecutorService
         bool hasWhere   = Regex.IsMatch(upper, @"\bWHERE\b");
         bool hasOrderBy = Regex.IsMatch(upper, @"\bORDER\s+BY\b");
 
-        if (hasJoin)    return VizJoin(c, sql);
+        if (hasJoin)    return VizJoinChain(c, sql);
         if (hasWhere && hasOrderBy) return VizWhereOrderBy(c, sql);
         if (hasOrderBy) return VizOrderBy(c, sql);
         if (hasWhere)   return VizWhere(c, sql);
 
-        var plain = ExecuteStatement(c, sql);
-        return plain;
+        // Simple query (no WHERE/ORDER/JOIN) → row-by-row table scan
+        var trimmed = sql.TrimStart().ToUpperInvariant();
+        if (trimmed.StartsWith("SELECT") || trimmed.StartsWith("WITH"))
+            return VizScan(c, sql);
+
+        return ExecuteStatement(c, sql);
+    }
+
+    /// <summary>Extracts a trailing LIMIT value, if present.</summary>
+    private static int? ParseLimit(string sql)
+    {
+        var m = Regex.Match(sql, @"\bLIMIT\s+(\d+)", RegexOptions.IgnoreCase);
+        return m.Success && int.TryParse(m.Groups[1].Value, out var n) ? n : null;
+    }
+
+    /// <summary>Removes a trailing LIMIT clause so the pre-limit rows can be shown.</summary>
+    private static string StripLimit(string sql)
+        => Regex.Replace(sql, @"\bLIMIT\s+\d+(\s+OFFSET\s+\d+)?", "",
+            RegexOptions.IgnoreCase | RegexOptions.Singleline).Trim().TrimEnd(';').Trim();
+
+    // ─────────────────────────────────────────────────────────────────────────
+    //  Scan visualiser (simple queries)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private static ScanResult VizScan(SqliteConnection c, string sql)
+    {
+        var limit = ParseLimit(sql);
+        // Fetch without LIMIT so the animation can show which rows get cut
+        var baseSql = StripLimit(sql);
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = baseSql;
+        using var reader = cmd.ExecuteReader();
+        var cols = GetColumns(reader);
+        var rows = new List<Dictionary<string, object?>>();
+        bool truncated = false;
+        while (reader.Read())
+        {
+            if (rows.Count >= MaxVizRows) { truncated = true; break; }
+            rows.Add(ReadRow(reader, cols));
+        }
+        return new ScanResult(cols, rows, limit, truncated);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -150,12 +189,14 @@ public class QueryExecutorService
             .Where(k => k.Length > 0)
             .ToList();
 
-        // Unsorted: strip ORDER BY
-        var unsortedSql = Regex.Replace(sql, @"\bORDER\s+BY\b.+", "",
-            RegexOptions.IgnoreCase | RegexOptions.Singleline).Trim();
+        // Unsorted: strip ORDER BY (and any LIMIT)
+        var unsortedSql = StripLimit(Regex.Replace(sql, @"\bORDER\s+BY\b.+", "",
+            RegexOptions.IgnoreCase | RegexOptions.Singleline).Trim());
         var (cols, unsortedRows) = FetchWithColumns(c, unsortedSql);
 
-        var (_, sortedRows) = FetchWithColumns(c, sql);
+        // Sorted, but without LIMIT so the animation can show the cut
+        var limit = ParseLimit(sql);
+        var (_, sortedRows) = FetchWithColumns(c, StripLimit(sql));
 
         // Find column indices for the sort keys
         var sortKeyIndices = sortKeys
@@ -164,7 +205,7 @@ public class QueryExecutorService
             .Where(i => i >= 0)
             .ToList();
 
-        return new OrderByResult(cols, unsortedRows, sortedRows, sortKeyIndices, sortKeys);
+        return new OrderByResult(cols, unsortedRows, sortedRows, sortKeyIndices, sortKeys, limit);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -178,6 +219,8 @@ public class QueryExecutorService
             @"\bWHERE\b\s*(.+?)(?:\bORDER\s+BY\b|\bGROUP\s+BY\b|\bHAVING\b|\bLIMIT\b|$)",
             RegexOptions.IgnoreCase | RegexOptions.Singleline);
         var whereText = whereMatch.Success ? whereMatch.Groups[1].Value.Trim() : "";
+        // Drop a trailing statement terminator so it doesn't leak into the last condition
+        whereText = whereText.TrimEnd().TrimEnd(';').TrimEnd();
 
         // All rows (no WHERE)
         var noWhereSql = Regex.Replace(
@@ -266,97 +309,106 @@ public class QueryExecutorService
     //  JOIN visualiser
     // ─────────────────────────────────────────────────────────────────────────
 
-    private const int MaxJoinRows = 10;
+    private const int MaxJoinRows = 50;
 
-    private static JoinResult VizJoin(SqliteConnection c, string sql)
+    // A single JOIN clause: optional type, table, optional alias, optional ON condition.
+    private const string JoinPattern =
+        @"(INNER\s+|LEFT\s+(?:OUTER\s+)?|RIGHT\s+(?:OUTER\s+)?|FULL\s+(?:OUTER\s+)?|CROSS\s+)?" +
+        @"JOIN\s+(\w+)(?:\s+(?:AS\s+)?(\w+))?(?:\s+ON\s+(.+?))?" +
+        @"(?=\s*(?:INNER\s+|LEFT\s+(?:OUTER\s+)?|RIGHT\s+(?:OUTER\s+)?|FULL\s+(?:OUTER\s+)?|CROSS\s+)?JOIN\b|$)";
+
+    private static readonly HashSet<string> SqlKeywords = new(StringComparer.OrdinalIgnoreCase)
+        { "JOIN", "INNER", "LEFT", "RIGHT", "FULL", "OUTER", "CROSS", "ON", "WHERE", "ORDER", "GROUP", "LIMIT", "AS" };
+
+    private static string? AliasOrNull(string s)
+        => string.IsNullOrEmpty(s) || SqlKeywords.Contains(s) ? null : s;
+
+    private static JoinChainResult VizJoinChain(SqliteConnection c, string sql)
     {
-        // Extract JOIN type and table names
-        var joinMatch = Regex.Match(sql,
-            @"\bFROM\s+(\w+)(?:\s+(?:AS\s+)?(\w+))?\s+((?:INNER\s+|LEFT\s+(?:OUTER\s+)?|RIGHT\s+(?:OUTER\s+)?|FULL\s+(?:OUTER\s+)?|CROSS\s+)?JOIN)\s+(\w+)(?:\s+(?:AS\s+)?(\w+))?\s+(?:ON\s+(.+?))?(?:\s*WHERE|\s*ORDER|\s*GROUP|\s*LIMIT|$)",
+        // Isolate the FROM…JOIN chain (up to WHERE/GROUP/ORDER/LIMIT)
+        var fromMatch = Regex.Match(sql,
+            @"\bFROM\s+(.+?)(?:\bWHERE\b|\bGROUP\s+BY\b|\bORDER\s+BY\b|\bLIMIT\b|$)",
             RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        var fromClause = fromMatch.Success ? fromMatch.Groups[1].Value.Trim() : "";
 
-        string leftTable  = joinMatch.Success ? joinMatch.Groups[1].Value : "";
-        string? leftAlias = joinMatch.Success && joinMatch.Groups[2].Length > 0 ? joinMatch.Groups[2].Value : null;
-        string joinType   = joinMatch.Success ? joinMatch.Groups[3].Value.Trim().ToUpperInvariant() : "JOIN";
-        string rightTable = joinMatch.Success ? joinMatch.Groups[4].Value : "";
-        string? rightAlias = joinMatch.Success && joinMatch.Groups[5].Length > 0 ? joinMatch.Groups[5].Value : null;
-        string onCondition = joinMatch.Success && joinMatch.Groups[6].Length > 0 ? joinMatch.Groups[6].Value.Trim() : "";
+        // First (driving) table + optional alias
+        var firstMatch = Regex.Match(fromClause, @"^\s*(\w+)(?:\s+(?:AS\s+)?(\w+))?", RegexOptions.IgnoreCase);
+        if (!firstMatch.Success || firstMatch.Groups[1].Length == 0)
+            throw new InvalidOperationException(
+                "Could not parse the FROM clause for visualization.");
 
-        // Parse key columns from ON clause  (e.g. a.id = b.a_id)
-        string? leftKey = null, rightKey = null;
-        var onMatch = Regex.Match(onCondition, @"(\w+)\.(\w+)\s*=\s*(\w+)\.(\w+)");
-        if (onMatch.Success)
+        var tableNames = new List<string> { firstMatch.Groups[1].Value };
+        var aliases    = new List<string?> { AliasOrNull(firstMatch.Groups[2].Value) };
+        var onConds    = new List<string>();
+        var joinTypes  = new List<string>();
+
+        foreach (Match jm in Regex.Matches(fromClause, JoinPattern, RegexOptions.IgnoreCase | RegexOptions.Singleline))
         {
-            leftKey  = onMatch.Groups[2].Value;
-            rightKey = onMatch.Groups[4].Value;
+            joinTypes.Add(jm.Groups[1].Length > 0 ? jm.Groups[1].Value.Trim().ToUpperInvariant() + " JOIN" : "JOIN");
+            tableNames.Add(jm.Groups[2].Value);
+            aliases.Add(AliasOrNull(jm.Groups[3].Value));
+            onConds.Add(jm.Groups[4].Value.Trim());
         }
 
-        // Fetch left and right table rows independently (cap to MaxJoinRows each)
-        var leftRef  = leftAlias  ?? leftTable;
-        var rightRef = rightAlias ?? rightTable;
+        if (tableNames.Count < 2)
+            throw new InvalidOperationException(
+                "Could not parse this JOIN for visualization. Supported form: " +
+                "FROM a [x] JOIN b [y] ON x.col = y.col [JOIN c …]");
 
-        var (leftCols, leftRows)   = FetchWithColumns(c, $"SELECT * FROM {leftTable}", MaxJoinRows);
-        var (rightCols, rightRows) = FetchWithColumns(c, $"SELECT * FROM {rightTable}", MaxJoinRows);
-
-        // Fetch merged (joined) rows
-        var (mergedCols, mergedRows) = FetchWithColumns(c, sql);
-
-        // Build match pairs using ON-clause keys directly (most reliable approach)
-        var matchPairs = new List<(int L, int R)>();
-        if (leftKey != null && rightKey != null)
+        // Fetch each participating table (capped)
+        var tableCols = new List<List<ColumnHeader>>();
+        var tableRows = new List<List<Dictionary<string, object?>>>();
+        bool truncated = false;
+        foreach (var t in tableNames)
         {
-            for (int li = 0; li < leftRows.Count; li++)
+            var (cols, rows) = FetchWithColumns(c, $"SELECT * FROM {t}", MaxJoinRows);
+            tableCols.Add(cols);
+            tableRows.Add(rows);
+            if (rows.Count >= MaxJoinRows) truncated = true;
+        }
+
+        // Build one JoinStep per join, matching table[k] rows to table[k+1] rows
+        var steps = new List<JoinStep>();
+        for (int k = 0; k < onConds.Count; k++)
+        {
+            var (leftKey, rightKey) = ParseJoinKeys(onConds[k], aliases[k + 1] ?? tableNames[k + 1]);
+            var pairs = new List<(int L, int R)>();
+            if (leftKey != null && rightKey != null)
             {
-                if (!leftRows[li].TryGetValue(leftKey, out var lv)) continue;
-                for (int ri = 0; ri < rightRows.Count; ri++)
+                var left = tableRows[k];
+                var right = tableRows[k + 1];
+                for (int li = 0; li < left.Count; li++)
                 {
-                    if (!rightRows[ri].TryGetValue(rightKey, out var rv)) continue;
-                    if (Equals(lv?.ToString(), rv?.ToString()))
+                    if (!left[li].TryGetValue(leftKey, out var lv)) continue;
+                    for (int ri = 0; ri < right.Count; ri++)
                     {
-                        var pair = (li, ri);
-                        if (!matchPairs.Contains(pair))
-                            matchPairs.Add(pair);
+                        if (right[ri].TryGetValue(rightKey, out var rv) && Equals(lv?.ToString(), rv?.ToString()))
+                            pairs.Add((li, ri));
                     }
                 }
             }
-        }
-        else
-        {
-            // Fallback: correlate via merged rows
-            foreach (var mr in mergedRows)
-            {
-                for (int li = 0; li < leftRows.Count; li++)
-                {
-                    for (int ri = 0; ri < rightRows.Count; ri++)
-                    {
-                        if (RowsMatchJoin(mr, leftRows[li], leftCols, leftAlias) &&
-                            RowsMatchJoin(mr, rightRows[ri], rightCols, rightAlias))
-                        {
-                            var pair = (li, ri);
-                            if (!matchPairs.Contains(pair))
-                                matchPairs.Add(pair);
-                        }
-                    }
-                }
-            }
+            steps.Add(new JoinStep(joinTypes[k], onConds[k], leftKey, rightKey, pairs));
         }
 
-        return new JoinResult(
-            JoinType:      joinType,
-            LeftTable:     leftTable,
-            LeftAlias:     leftAlias,
-            RightTable:    rightTable,
-            RightAlias:    rightAlias,
-            OnCondition:   onCondition,
-            LeftKey:       leftKey,
-            RightKey:      rightKey,
-            LeftColumns:   leftCols,
-            RightColumns:  rightCols,
-            LeftRows:      leftRows,
-            RightRows:     rightRows,
-            MergedColumns: mergedCols,
-            MergedRows:    mergedRows,
-            MatchPairs:    matchPairs);
+        // Merged (joined) rows — without LIMIT so every match can be shown
+        var (mergedCols, mergedRows) = FetchWithColumns(c, StripLimit(sql), MaxJoinRows);
+        if (mergedRows.Count >= MaxJoinRows) truncated = true;
+
+        return new JoinChainResult(tableNames, aliases, tableCols, tableRows, steps,
+            mergedCols, mergedRows, truncated);
+    }
+
+    /// <summary>Parses an ON condition, returning (leftKey on table k, rightKey on table k+1).</summary>
+    private static (string?, string?) ParseJoinKeys(string onCondition, string newTableRef)
+    {
+        var m = Regex.Match(onCondition, @"(\w+)\.(\w+)\s*=\s*(\w+)\.(\w+)");
+        if (!m.Success) return (null, null);
+        string aRef = m.Groups[1].Value, aCol = m.Groups[2].Value;
+        string bRef = m.Groups[3].Value, bCol = m.Groups[4].Value;
+        // The side referencing the newly-joined table is the "right" key
+        if (string.Equals(bRef, newTableRef, StringComparison.OrdinalIgnoreCase)) return (aCol, bCol);
+        if (string.Equals(aRef, newTableRef, StringComparison.OrdinalIgnoreCase)) return (bCol, aCol);
+        return (aCol, bCol);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -390,28 +442,4 @@ public class QueryExecutorService
     /// <summary>Generates a stable string key for a row (for set membership tests).</summary>
     private static string RowKey(Dictionary<string, object?> row)
         => string.Join("|", row.OrderBy(kv => kv.Key).Select(kv => $"{kv.Key}={kv.Value}"));
-
-    /// <summary>
-    /// Checks if a merged join row contains all values from a side-table row.
-    /// Handles both plain and alias-prefixed column names.
-    /// </summary>
-    private static bool RowsMatchJoin(
-        Dictionary<string, object?> merged,
-        Dictionary<string, object?> sideRow,
-        List<ColumnHeader> sideCols,
-        string? alias)
-    {
-        foreach (var col in sideCols)
-        {
-            var colName = col.Name;
-            // Try plain name first, then alias.colname
-            object? mergedVal = null;
-            bool found = merged.TryGetValue(colName, out mergedVal) ||
-                         (alias != null && merged.TryGetValue($"{alias}.{colName}", out mergedVal));
-            if (!found) return false;
-            var sideVal = sideRow.TryGetValue(colName, out var sv) ? sv : null;
-            if (!Equals(mergedVal, sideVal)) return false;
-        }
-        return true;
-    }
 }

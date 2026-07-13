@@ -12,6 +12,7 @@ public class SqliteConnectionService : IDisposable
 {
     private SqliteConnection? _conn;
     private ConnectionStatus _status = new(false);
+    private string? _tempPath;
 
     public ConnectionStatus Status => _status;
 
@@ -23,6 +24,7 @@ public class SqliteConnectionService : IDisposable
         // Write bytes to an in-memory temp path accessible within WASM process
         var path = Path.Combine(Path.GetTempPath(), $"sqlvis_{Guid.NewGuid():N}.db");
         File.WriteAllBytes(path, dbBytes);
+        _tempPath = path;
         _conn = new SqliteConnection($"Data Source={path}");
         _conn.Open();
         _status = new ConnectionStatus(true, displayName);
@@ -50,6 +52,12 @@ public class SqliteConnectionService : IDisposable
             _conn.Close();
             _conn.Dispose();
             _conn = null;
+            SqliteConnection.ClearAllPools();
+        }
+        if (_tempPath is not null)
+        {
+            try { File.Delete(_tempPath); } catch { /* best effort */ }
+            _tempPath = null;
         }
         _status = new ConnectionStatus(false);
     }
