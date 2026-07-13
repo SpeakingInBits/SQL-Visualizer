@@ -88,6 +88,7 @@ public record JoinChainResult(
     List<List<ColumnHeader>> TableColumns,
     List<List<Dictionary<string, object?>>> TableRows,
     List<JoinStep> Steps,                       // Count == TableNames.Count - 1
+    List<int[]> JoinPaths,                       // one per output row: source row index per table
     List<ColumnHeader> MergedColumns,
     List<Dictionary<string, object?>> MergedRows,
     bool Truncated)

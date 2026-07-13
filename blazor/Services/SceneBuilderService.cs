@@ -346,35 +346,58 @@ public class SceneBuilderService
         var (mNodes, _, _, mRowIds) = MakeTable("merged", "Joined Result", j.MergedColumns, j.MergedRows, x, Pad);
         nodes.AddRange(mNodes);
 
-        // Static edges: one per match pair in each step, between adjacent tables
+        // One connector per path segment, grouped by output row so we can light
+        // up exactly the source rows that combine to form each joined row.
         var edges = new List<VizEdge>();
-        var participatingRows = new HashSet<string>();
-        for (int k = 0; k < j.Steps.Count; k++)
-            foreach (var (L, R) in j.Steps[k].MatchPairs)
+        var pathEdges = new List<List<int>>();
+        for (int i = 0; i < j.JoinPaths.Count; i++)
+        {
+            var p = j.JoinPaths[i];
+            var segs = new List<int>();
+            for (int k = 0; k < t - 1; k++)
             {
+                int L = p[k], R = p[k + 1];
                 if (L < tableRowIds[k].Count && R < tableRowIds[k + 1].Count)
                 {
-                    edges.Add(new VizEdge(tableRowIds[k][L], tableRowIds[k + 1][R], "static"));
-                    participatingRows.Add(tableRowIds[k][L]);
-                    participatingRows.Add(tableRowIds[k + 1][R]);
+                    segs.Add(edges.Count);
+                    edges.Add(new VizEdge(tableRowIds[k][L], tableRowIds[k + 1][R]));
                 }
             }
-        var allStaticEdges = Enumerable.Range(0, edges.Count).ToList();
+            pathEdges.Add(segs);
+        }
 
-        // Frames: reveal merged rows one at a time; matched source rows stay lit
         int mm = mRowIds.Count;
-        var baseMatched = participatingRows.ToDictionary(id => id, _ => "matched");
         var frames = new List<VizFrame>
         {
-            F(new(), HideFrom(mRowIds, 0), allStaticEdges, phase: "Tables & join keys")
+            F(hidden: HideFrom(mRowIds, 0), phase: $"Ready — {mm} joined row(s)")
         };
+        var used = new HashSet<string>();
         for (int i = 0; i < mm; i++)
         {
-            var st = new Dictionary<string, string>(baseMatched);
-            for (int r = 0; r <= i; r++) st[mRowIds[r]] = r == i ? "new" : "matched";
-            frames.Add(F(st, HideFrom(mRowIds, i + 1), allStaticEdges,
-                phase: $"Emit joined row {i + 1} of {mm}"));
+            var p = j.JoinPaths[i];
+
+            // Light the source rows that form this joined row; keep prior ones dim-green
+            var active = new Dictionary<string, string>();
+            foreach (var id in used) active[id] = "matched";
+            for (int k = 0; k < t; k++)
+                if (p[k] < tableRowIds[k].Count) active[tableRowIds[k][p[k]]] = "active";
+
+            // Forming: draw the connectors across the tables, result row not yet added
+            frames.Add(F(new Dictionary<string, string>(active), HideFrom(mRowIds, i),
+                pathEdges[i], phase: $"Forming joined row {i + 1} of {mm}"));
+
+            // Emit: the completed row drops into the joined result table
+            var emit = new Dictionary<string, string>(active) { [mRowIds[i]] = "new" };
+            frames.Add(F(emit, HideFrom(mRowIds, i + 1), pathEdges[i],
+                phase: $"Add joined row {i + 1} to result"));
+
+            for (int k = 0; k < t; k++)
+                if (p[k] < tableRowIds[k].Count) used.Add(tableRowIds[k][p[k]]);
         }
+
+        var final = used.ToDictionary(id => id, _ => "matched");
+        foreach (var id in mRowIds) final[id] = "matched";
+        frames.Add(F(final, phase: "Join complete"));
 
         var joinDesc = string.Join(" ⋈ ", j.TableNames);
         var onDesc = string.Join("  ·  ", j.Steps.Select(s => s.OnCondition));

@@ -390,12 +390,158 @@ public class QueryExecutorService
             steps.Add(new JoinStep(joinTypes[k], onConds[k], leftKey, rightKey, pairs));
         }
 
-        // Merged (joined) rows — without LIMIT so every match can be shown
-        var (mergedCols, mergedRows) = FetchWithColumns(c, StripLimit(sql), MaxJoinRows);
-        if (mergedRows.Count >= MaxJoinRows) truncated = true;
+        // Enumerate inner-join paths (nested loop, first table outer) so each
+        // output row maps to the exact source rows across every table.
+        var paths = EnumerateJoinPaths(steps, tableRows[0].Count, MaxJoinRows);
+        if (paths.Count >= MaxJoinRows) truncated = true;
+
+        // Build the joined result rows from the SELECT projection
+        var specs = ParseProjection(sql, tableNames, aliases, tableCols);
+        var seen = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var keys = new List<string>();
+        var mergedCols = new List<ColumnHeader>();
+        foreach (var s in specs)
+        {
+            var name = s.Header;
+            if (seen.TryGetValue(name, out var cnt)) { seen[name] = cnt + 1; name = $"{name}_{cnt + 1}"; }
+            else seen[name] = 1;
+            keys.Add(name);
+            mergedCols.Add(new ColumnHeader(name));
+        }
+        var mergedRows = paths.Select(p =>
+        {
+            var row = new Dictionary<string, object?>();
+            for (int s = 0; s < specs.Count; s++)
+            {
+                var src = tableRows[specs[s].T][p[specs[s].T]];
+                row[keys[s]] = src.TryGetValue(specs[s].Col, out var v) ? v : null;
+            }
+            return row;
+        }).ToList();
 
         return new JoinChainResult(tableNames, aliases, tableCols, tableRows, steps,
-            mergedCols, mergedRows, truncated);
+            paths, mergedCols, mergedRows, truncated);
+    }
+
+    /// <summary>Enumerates inner-join row-index tuples across the table chain.</summary>
+    private static List<int[]> EnumerateJoinPaths(List<JoinStep> steps, int firstCount, int cap)
+    {
+        var partial = new List<List<int>>();
+        for (int i = 0; i < firstCount; i++) partial.Add(new List<int> { i });
+
+        foreach (var step in steps)
+        {
+            var adj = new Dictionary<int, List<int>>();
+            foreach (var (L, R) in step.MatchPairs)
+            {
+                if (!adj.TryGetValue(L, out var list)) { list = new(); adj[L] = list; }
+                list.Add(R);
+            }
+            var next = new List<List<int>>();
+            foreach (var p in partial)
+            {
+                if (adj.TryGetValue(p[^1], out var rs))
+                    foreach (var r in rs)
+                    {
+                        next.Add(new List<int>(p) { r });
+                        if (next.Count >= cap) break;
+                    }
+                if (next.Count >= cap) break;
+            }
+            partial = next;
+        }
+        return partial.Take(cap).Select(p => p.ToArray()).ToList();
+    }
+
+    /// <summary>Resolves the SELECT list into (header, tableIndex, column) specs.
+    /// Falls back to all columns (alias-qualified) for `*` or unsupported expressions.</summary>
+    private static List<(string Header, int T, string Col)> ParseProjection(
+        string sql, List<string> tableNames, List<string?> aliases, List<List<ColumnHeader>> tableCols)
+    {
+        var refToIdx = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        for (int k = 0; k < tableNames.Count; k++)
+        {
+            refToIdx[tableNames[k]] = k;
+            if (aliases[k] != null) refToIdx[aliases[k]!] = k;
+        }
+
+        string RefLabel(int k) => aliases[k] ?? tableNames[k];
+        void AddTable(List<(string, int, string)> acc, int k)
+        {
+            foreach (var col in tableCols[k]) acc.Add(($"{RefLabel(k)}.{col.Name}", k, col.Name));
+        }
+        List<(string, int, string)> AllColumns()
+        {
+            var acc = new List<(string, int, string)>();
+            for (int k = 0; k < tableNames.Count; k++) AddTable(acc, k);
+            return acc;
+        }
+
+        var selMatch = Regex.Match(sql, @"\bSELECT\b\s+(?:DISTINCT\s+)?(.+?)\s+\bFROM\b",
+            RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        if (!selMatch.Success) return AllColumns();
+
+        var specs = new List<(string, int, string)>();
+        foreach (var raw in SplitTopLevelComma(selMatch.Groups[1].Value))
+        {
+            var item = raw.Trim();
+            string? outName = null;
+            var asm = Regex.Match(item, @"^(.*?)\s+AS\s+(\w+)$", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            if (asm.Success) { item = asm.Groups[1].Value.Trim(); outName = asm.Groups[2].Value; }
+
+            if (item == "*") { specs.AddRange(AllColumns()); continue; }
+
+            var starM = Regex.Match(item, @"^(\w+)\.\*$");
+            if (starM.Success)
+            {
+                if (refToIdx.TryGetValue(starM.Groups[1].Value, out var ti)) AddTable(specs, ti);
+                else return AllColumns();
+                continue;
+            }
+            var qualM = Regex.Match(item, @"^(\w+)\.(\w+)$");
+            if (qualM.Success)
+            {
+                if (refToIdx.TryGetValue(qualM.Groups[1].Value, out var ti))
+                    specs.Add((outName ?? qualM.Groups[2].Value, ti, qualM.Groups[2].Value));
+                else return AllColumns();
+                continue;
+            }
+            var bareM = Regex.Match(item, @"^(\w+)$");
+            if (bareM.Success)
+            {
+                int ti = FindTableWithColumn(tableCols, bareM.Groups[1].Value);
+                if (ti >= 0) specs.Add((outName ?? bareM.Groups[1].Value, ti, bareM.Groups[1].Value));
+                else return AllColumns();
+                continue;
+            }
+            // Unsupported expression (function, arithmetic, …) → show every column instead
+            return AllColumns();
+        }
+        return specs.Count > 0 ? specs : AllColumns();
+    }
+
+    private static int FindTableWithColumn(List<List<ColumnHeader>> tableCols, string col)
+    {
+        for (int k = 0; k < tableCols.Count; k++)
+            if (tableCols[k].Any(c => string.Equals(c.Name, col, StringComparison.OrdinalIgnoreCase)))
+                return k;
+        return -1;
+    }
+
+    /// <summary>Splits a comma-separated list, respecting parentheses depth.</summary>
+    private static List<string> SplitTopLevelComma(string expr)
+    {
+        var parts = new List<string>();
+        int depth = 0, start = 0;
+        for (int i = 0; i < expr.Length; i++)
+        {
+            char ch = expr[i];
+            if (ch == '(') depth++;
+            else if (ch == ')') depth--;
+            else if (ch == ',' && depth == 0) { parts.Add(expr[start..i]); start = i + 1; }
+        }
+        parts.Add(expr[start..]);
+        return parts.Where(p => p.Trim().Length > 0).ToList();
     }
 
     /// <summary>Parses an ON condition, returning (leftKey on table k, rightKey on table k+1).</summary>
