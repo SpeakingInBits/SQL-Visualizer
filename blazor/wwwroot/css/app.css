@@ -233,7 +233,9 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .nc-edges { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
 .nc-edge { stroke-width: 2; transition: stroke .15s, opacity .15s; }
 .nc-edge.idle { stroke: var(--border); opacity: .5; }
-.nc-edge.active { stroke: var(--accent); opacity: 1; stroke-width: 2.5; }
+/* Active connectors "draw" across the tables (and fade in) as a row forms */
+.nc-edge.active { stroke: var(--accent); stroke-width: 2.5; stroke-dasharray: 1; stroke-dashoffset: 1; animation: nc-draw .4s ease-out forwards; }
+@keyframes nc-draw { from { stroke-dashoffset: 1; opacity: 0; } to { stroke-dashoffset: 0; opacity: 1; } }
 
 /* Nodes */
 .nc-node { position: absolute; box-sizing: border-box; border: 1px solid var(--border); background: var(--surface); border-radius: 4px; display: flex; align-items: center; font-family: var(--mono); font-size: 12px; overflow: hidden; transition: border-color .15s, background .15s, opacity .15s; }
@@ -250,6 +252,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .nc-card.false { border-color: var(--red); }
 
 /* Row states */
+.nc-row.dim { opacity: .25; filter: saturate(.5); }
 .nc-row.pending { opacity: .45; }
 .nc-row.scanning { border-color: var(--accent); background: rgba(137,180,250,.2); color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .nc-row.read { opacity: .85; }

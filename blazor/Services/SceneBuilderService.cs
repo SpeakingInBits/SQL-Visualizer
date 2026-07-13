@@ -367,6 +367,7 @@ public class SceneBuilderService
         }
 
         int mm = mRowIds.Count;
+        var allSourceIds = tableRowIds.SelectMany(ids => ids).ToList();
         var frames = new List<VizFrame>
         {
             F(hidden: HideFrom(mRowIds, 0), phase: $"Ready — {mm} joined row(s)")
@@ -376,8 +377,9 @@ public class SceneBuilderService
         {
             var p = j.JoinPaths[i];
 
-            // Light the source rows that form this joined row; keep prior ones dim-green
-            var active = new Dictionary<string, string>();
+            // Dim every source row, then surface the ones in play: prior rows stay
+            // dim-green (matched), the current path's rows light up (active).
+            var active = allSourceIds.ToDictionary(id => id, _ => "dim");
             foreach (var id in used) active[id] = "matched";
             for (int k = 0; k < t; k++)
                 if (p[k] < tableRowIds[k].Count) active[tableRowIds[k][p[k]]] = "active";

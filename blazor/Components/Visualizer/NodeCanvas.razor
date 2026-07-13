@@ -23,7 +23,8 @@
                     var path = EdgePath(edge);
                     if (path != null)
                     {
-                        <path d="@path" class="nc-edge @(active ? "active" : "idle")" fill="none" />
+                        <path @key="ei" d="@path" pathLength="1"
+                              class="nc-edge @(active ? "active" : "idle")" fill="none" />
                     }
                 }
             }
