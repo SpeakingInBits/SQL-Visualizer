@@ -1,0 +1,177 @@
+@using System.Globalization
+@inject IJSRuntime JS
+
+<div class="node-canvas @(_dragging ? "dragging" : "")"
+     @ref="_viewport"
+     @onwheel="OnWheel" @onwheel:preventDefault
+     @onpointerdown="OnPointerDown"
+     @onpointermove="OnPointerMove"
+     @onpointerup="OnPointerUp"
+     @onpointerleave="OnPointerUp">
+
+    <div class="nc-world" style="transform: translate(@Px(_panX)px, @Px(_panY)px) scale(@Px(_zoom));">
+
+        @* Edges layer *@
+        <svg class="nc-edges" width="@Px(Scene.Width)" height="@Px(Scene.Height)"
+             viewBox="0 0 @Px(Scene.Width) @Px(Scene.Height)">
+            @for (int ei = 0; ei < Scene.Edges.Count; ei++)
+            {
+                var edge = Scene.Edges[ei];
+                bool active = Frame.ActiveEdges.Contains(ei);
+                if (active || edge.Kind == "static")
+                {
+                    var path = EdgePath(edge);
+                    if (path != null)
+                    {
+                        <path @key="ei" d="@path" pathLength="1"
+                              class="nc-edge @(active ? "active" : "idle")" fill="none" />
+                    }
+                }
+            }
+        </svg>
+
+        @* Nodes *@
+        @foreach (var node in Scene.Nodes)
+        {
+            if (Frame.Hidden.Contains(node.Id)) { continue; }
+            var state = Frame.States.TryGetValue(node.Id, out var s) ? s : "";
+            <div class="nc-node nc-@node.Kind @state"
+                 style="left:@Px(node.X)px; top:@Px(node.Y)px; width:@Px(node.W)px; height:@Px(node.H)px;">
+                @switch (node.Kind)
+                {
+                    case "title":
+                        <span class="nc-title-text">@node.Title</span>
+                        break;
+                    case "card":
+                        <span class="nc-card-text">@node.Badge</span>
+                        @if (state is "true" or "false")
+                        {
+                            <span class="nc-card-badge @state">@(state == "true" ? "TRUE" : "FALSE")</span>
+                        }
+                        break;
+                    case "header":
+                    case "row":
+                        @foreach (var cell in node.Cells)
+                        {
+                            <span class="nc-cell">@cell</span>
+                        }
+                        break;
+                    default:
+                        <span>@node.Title</span>
+                        break;
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public VizScene Scene { get; set; } = null!;
+    [Parameter, EditorRequired] public VizFrame Frame { get; set; } = null!;
+
+    private ElementReference _viewport;
+    private double _zoom = 1, _panX = 0, _panY = 0;
+    private bool _dragging;
+    private double _lastX, _lastY;
+    private double _rectLeft, _rectTop, _vw = 800, _vh = 600;
+    private string? _fittedFor;
+
+    private Dictionary<string, VizNode> _byId = new();
+
+    protected override void OnParametersSet()
+    {
+        _byId = Scene.Nodes.ToDictionary(n => n.Id);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Fit once per distinct scene
+        var sig = $"{Scene.VizType}:{Scene.Width}x{Scene.Height}:{Scene.Nodes.Count}";
+        if (_fittedFor != sig)
+        {
+            await RefreshRect();
+            Fit();
+            _fittedFor = sig;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RefreshRect()
+    {
+        try
+        {
+            var r = await JS.InvokeAsync<Rect?>("SqlVis.getRect", _viewport);
+            if (r != null) { _rectLeft = r.Left; _rectTop = r.Top; _vw = r.Width; _vh = r.Height; }
+        }
+        catch { /* keep last known size */ }
+    }
+
+    private record Rect(double Left, double Top, double Width, double Height);
+
+    // ── Public controls (called from the modal toolbar) ──────────────────────
+
+    public void ZoomBy(double factor) => ZoomAt(factor, _vw / 2, _vh / 2);
+
+    public async Task FitAsync() { await RefreshRect(); Fit(); StateHasChanged(); }
+
+    public void Fit()
+    {
+        if (Scene.Width <= 0 || Scene.Height <= 0) return;
+        double z = Math.Min(_vw / Scene.Width, _vh / Scene.Height) * 0.92;
+        _zoom = Math.Clamp(z, 0.1, 4);
+        _panX = Math.Max(12, (_vw - Scene.Width * _zoom) / 2);
+        _panY = Math.Max(12, (_vh - Scene.Height * _zoom) / 2);
+    }
+
+    // ── Interaction ──────────────────────────────────────────────────────────
+
+    private void ZoomAt(double factor, double px, double py)
+    {
+        double newZoom = Math.Clamp(_zoom * factor, 0.1, 4);
+        double wx = (px - _panX) / _zoom;
+        double wy = (py - _panY) / _zoom;
+        _panX = px - wx * newZoom;
+        _panY = py - wy * newZoom;
+        _zoom = newZoom;
+    }
+
+    private void OnWheel(WheelEventArgs e)
+    {
+        double factor = e.DeltaY < 0 ? 1.12 : 1 / 1.12;
+        // ClientX/Y minus cached viewport origin = cursor position within the canvas
+        ZoomAt(factor, e.ClientX - _rectLeft, e.ClientY - _rectTop);
+    }
+
+    private async Task OnPointerDown(PointerEventArgs e)
+    {
+        _dragging = true;
+        _lastX = e.ClientX;
+        _lastY = e.ClientY;
+        await RefreshRect();
+    }
+
+    private void OnPointerMove(PointerEventArgs e)
+    {
+        if (!_dragging) return;
+        _panX += e.ClientX - _lastX;
+        _panY += e.ClientY - _lastY;
+        _lastX = e.ClientX;
+        _lastY = e.ClientY;
+    }
+
+    private void OnPointerUp(PointerEventArgs e) => _dragging = false;
+
+    // ── Edge geometry ────────────────────────────────────────────────────────
+
+    private string? EdgePath(VizEdge edge)
+    {
+        if (!_byId.TryGetValue(edge.FromId, out var a) || !_byId.TryGetValue(edge.ToId, out var b))
+            return null;
+        double x1 = a.X + a.W, y1 = a.Y + a.H / 2;
+        double x2 = b.X,       y2 = b.Y + b.H / 2;
+        double dx = Math.Max(40, Math.Abs(x2 - x1) * 0.4);
+        return $"M {Px(x1)},{Px(y1)} C {Px(x1 + dx)},{Px(y1)} {Px(x2 - dx)},{Px(y2)} {Px(x2)},{Px(y2)}";
+    }
+
+    private static string Px(double v) => v.ToString("0.##", CultureInfo.InvariantCulture);
+}

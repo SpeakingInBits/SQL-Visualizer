@@ -1,6 +1,7 @@
 @using BlazorMonaco
 @using BlazorMonaco.Editor
 @inject QueryExecutorService Executor
+@inject SceneBuilderService SceneBuilder
 @inject SqliteConnectionService ConnSvc
 
 <div class="query-editor">
@@ -20,17 +21,14 @@
 
     <div class="results-area">
         <div class="result-tabs">
-            <button class="tab @(_tab == "results" ? "active" : "")" @onclick='() => _tab = "results"'>Results</button>
-            <button class="tab @(_tab == "visualizer" ? "active" : "")"
-                    disabled="@(_vizResult == null)"
-                    @onclick='() => _tab = "visualizer"'>Visualizer</button>
+            <button class="tab active">Results</button>
         </div>
 
-        @if (_tab == "results" && _plainResult != null)
+        @if (_plainResult != null)
         {
             @if (_plainResult.Type == "DML")
             {
-                <div class="dml-result">✓ @_plainResult.RowsAffected rows affected.</div>
+                <div class="dml-result">✓ @_plainResult.RowsAffected @(_plainResult.RowsAffected == 1 ? "row" : "rows") affected.</div>
             }
             else
             {
@@ -58,13 +56,17 @@
                 </div>
             }
         }
-
-        @if (_tab == "visualizer" && _vizResult != null)
+        else
         {
-            <Visualizer Result="_vizResult" />
+            <div class="results-hint">Run a query to see results, or hit <strong>Visualize</strong> to open the animated view.</div>
         }
     </div>
 </div>
+
+@if (_scene != null)
+{
+    <VizModal Scene="_scene" OnClose="CloseModal" />
+}
 
 @code {
     [Parameter] public EventCallback<VizResult> OnVizResult { get; set; }
@@ -72,10 +74,9 @@
 
     private StandaloneCodeEditor? _editor;
     private PlainResult? _plainResult;
-    private VizResult? _vizResult;
+    private VizScene? _scene;
     private bool _loading;
     private string? _error;
-    private string _tab = "results";
 
     private StandaloneEditorConstructionOptions EditorOptions(StandaloneCodeEditor _) =>
         new()
@@ -121,7 +122,6 @@
         try
         {
             _plainResult = Executor.RunStatement(sql);
-            _tab = "results";
         }
         catch (Exception ex) { _error = ex.Message; }
         finally { _loading = false; }
@@ -131,15 +131,17 @@
     {
         var sql = await GetSql();
         if (string.IsNullOrWhiteSpace(sql)) return;
-        _loading = true; _error = null; _vizResult = null;
+        _loading = true; _error = null;
         StateHasChanged();
         try
         {
-            _vizResult = Executor.VisualizeQuery(sql);
-            _tab = "visualizer";
-            await OnVizResult.InvokeAsync(_vizResult);
+            var result = Executor.VisualizeQuery(sql);
+            _scene = SceneBuilder.Build(result);
+            await OnVizResult.InvokeAsync(result);
         }
         catch (Exception ex) { _error = ex.Message; }
         finally { _loading = false; }
     }
+
+    private void CloseModal() => _scene = null;
 }

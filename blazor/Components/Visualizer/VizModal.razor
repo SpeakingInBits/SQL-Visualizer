@@ -1,0 +1,97 @@
+@implements IDisposable
+
+<div class="viz-modal-backdrop" @onclick="Close">
+    <div class="viz-modal" @onclick:stopPropagation="true">
+
+        <div class="viz-modal-header">
+            <div class="vm-titles">
+                <span class="vm-title">@Scene.Title</span>
+                <span class="vm-sub">@Scene.Subtitle</span>
+            </div>
+            <button class="vm-close" @onclick="Close" title="Close (Esc)">✕</button>
+        </div>
+
+        <div class="viz-modal-toolbar">
+            <div class="vm-group">
+                <button class="btn-step" @onclick="StepBack" disabled="@(_frame <= 0)" title="Previous">⏮</button>
+                <button @onclick="TogglePlay" title="Play / Pause">@(_playing ? "⏸" : "▶")</button>
+                <button class="btn-step" @onclick="StepForward" disabled="@(_frame >= FrameCount - 1)" title="Next">⏭</button>
+                <button @onclick="Reset" title="Restart">↺</button>
+            </div>
+
+            <label class="vm-speed">Speed
+                <input type="range" min="1" max="10" @bind="_speed" @bind:event="oninput" />
+                <span class="speed-value">@_speed</span>
+            </label>
+
+            <div class="vm-group">
+                <button @onclick="() => _canvas?.ZoomBy(1/1.2)" title="Zoom out">➖</button>
+                <button @onclick="FitView" title="Fit to view">⤢</button>
+                <button @onclick="() => _canvas?.ZoomBy(1.2)" title="Zoom in">➕</button>
+            </div>
+
+            <span class="vm-phase">@CurrentPhase</span>
+            <span class="frame-counter">Step @_frame / @(FrameCount - 1)</span>
+        </div>
+
+        <div class="viz-modal-body">
+            <NodeCanvas @ref="_canvas" Scene="Scene" Frame="Scene.Frames[_frame]" />
+            <div class="vm-hint">Scroll to zoom · drag to pan</div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public VizScene Scene { get; set; } = null!;
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private NodeCanvas? _canvas;
+    private int _frame = 0;
+    private int _speed = 5;
+    private bool _playing;
+    private System.Threading.Timer? _timer;
+
+    private int FrameCount => Math.Max(1, Scene.Frames.Count);
+    private string CurrentPhase => Scene.Frames[_frame].Phase ?? "";
+
+    protected override void OnParametersSet()
+    {
+        if (_frame >= FrameCount) _frame = 0;
+    }
+
+    private async Task FitView() { if (_canvas != null) await _canvas.FitAsync(); }
+
+    private void TogglePlay()
+    {
+        _playing = !_playing;
+        if (_playing)
+        {
+            if (_frame >= FrameCount - 1) _frame = 0;
+            int interval = Math.Max(120, 1100 - _speed * 100);
+            _timer = new System.Threading.Timer(_ =>
+            {
+                InvokeAsync(() =>
+                {
+                    if (_frame < FrameCount - 1) _frame++;
+                    else { _playing = false; _timer?.Dispose(); }
+                    StateHasChanged();
+                });
+            }, null, interval, interval);
+        }
+        else { _timer?.Dispose(); }
+    }
+
+    private void StepForward() { StopTimer(); if (_frame < FrameCount - 1) _frame++; }
+    private void StepBack()    { StopTimer(); if (_frame > 0) _frame--; }
+    private void Reset()       { StopTimer(); _frame = 0; }
+
+    private void StopTimer() { _playing = false; _timer?.Dispose(); _timer = null; }
+
+    private async Task Close()
+    {
+        StopTimer();
+        await OnClose.InvokeAsync();
+    }
+
+    public void Dispose() => _timer?.Dispose();
+}

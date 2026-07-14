@@ -12,12 +12,14 @@ Built with [Blazor WebAssembly](https://learn.microsoft.com/en-us/aspnet/core/bl
 - **Schema browser** — tree view of tables → columns with PK / FK indicators
 - **Query editor** — Monaco (VS Code) editor with SQL syntax highlighting; `Ctrl+Enter` to run
 - **Run** any statement — SELECT, INSERT, UPDATE, DELETE; DML shows rows-affected feedback
-- **Visualize** SELECT queries:
-  - `ORDER BY` — rows animate into their sorted positions step by step
-  - `WHERE` — rows are scanned, each AND condition evaluated individually, non-matching rows crossed out
-  - `WHERE + ORDER BY` — filter phase followed by sort phase
-  - `JOIN` — SVG connectors between matched rows from each table, then the merged result
-- **Step-through controls** — Prev / Next / Play / Reset for teacher-led demos
+- **Visualize** SELECT queries in a zoomable, pannable **node-graph canvas** (opens in a full-screen modal):
+  - **Simple query** — a row-by-row table scan
+  - `LIMIT` — rows beyond the limit are visibly cut
+  - `ORDER BY` — input rows flow into their sorted positions, one connector at a time
+  - `WHERE` — rows are scanned, each AND condition evaluated on its own card (TRUE/FALSE), matches collected into an output table
+  - `WHERE + ORDER BY` — filter stage followed by a sort stage
+  - `JOIN` — one or **multiple** joins laid out left-to-right, connectors between matched rows, then the merged result
+- **Navigable space** — scroll to zoom, drag to pan, plus zoom / fit buttons; playback controls (Prev / Next / Play / Reset / Speed) stay as a fixed 2D toolbar for teacher-led demos
 - **Script library** — upload `.sql` files, save them to browser storage, and re-run on demand
 
 ---

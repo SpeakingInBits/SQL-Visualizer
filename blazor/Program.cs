@@ -12,6 +12,7 @@ builder.Services.AddSingleton<SqliteConnectionService>();
 builder.Services.AddSingleton<SampleDatabaseService>();
 builder.Services.AddSingleton<SchemaService>();
 builder.Services.AddSingleton<QueryExecutorService>();
+builder.Services.AddSingleton<SceneBuilderService>();
 builder.Services.AddSingleton<ScriptRunnerService>();
 builder.Services.AddSingleton<ScriptStoreService>();
 

@@ -35,12 +35,21 @@ public record PlainResult(
     bool Truncated)
     : VizResult("plain");
 
+/// A plain table scan — used to visualize simple queries (no WHERE/ORDER/JOIN).
+public record ScanResult(
+    List<ColumnHeader> Columns,
+    List<Dictionary<string, object?>> Rows,
+    int? Limit,
+    bool Truncated)
+    : VizResult("scan");
+
 public record OrderByResult(
     List<ColumnHeader> Columns,
     List<Dictionary<string, object?>> UnsortedRows,
     List<Dictionary<string, object?>> SortedRows,
     List<int> SortKeyIndices,
-    List<string> SortKeys)
+    List<string> SortKeys,
+    int? Limit)
     : VizResult("order_by");
 
 public record WhereResult(
@@ -64,23 +73,29 @@ public record WhereOrderByResult(
     List<string> SortKeys)
     : VizResult("where_order_by");
 
-public record JoinResult(
+/// One JOIN in a chain, adding table[k+1]. Its ON condition references some
+/// already-joined table[LeftTableIndex] (usually k, but earlier for star/snowflake
+/// shapes). MatchPairs are (row in table[LeftTableIndex], row in table[k+1]).
+public record JoinStep(
     string JoinType,
-    string LeftTable,
-    string? LeftAlias,
-    string RightTable,
-    string? RightAlias,
     string OnCondition,
     string? LeftKey,
     string? RightKey,
-    List<ColumnHeader> LeftColumns,
-    List<ColumnHeader> RightColumns,
-    List<Dictionary<string, object?>> LeftRows,
-    List<Dictionary<string, object?>> RightRows,
+    List<(int L, int R)> MatchPairs,
+    int LeftTableIndex);
+
+/// A chain of one or more joins across N tables laid out left-to-right.
+public record JoinChainResult(
+    List<string> TableNames,
+    List<string?> Aliases,
+    List<List<ColumnHeader>> TableColumns,
+    List<List<Dictionary<string, object?>>> TableRows,
+    List<JoinStep> Steps,                       // Count == TableNames.Count - 1
+    List<int[]> JoinPaths,                       // one per output row: source row index per table
     List<ColumnHeader> MergedColumns,
     List<Dictionary<string, object?>> MergedRows,
-    List<(int L, int R)> MatchPairs)
-    : VizResult("join");
+    bool Truncated)
+    : VizResult("join_chain");
 
 // ── Scripts ───────────────────────────────────────────────────────────────────
 
