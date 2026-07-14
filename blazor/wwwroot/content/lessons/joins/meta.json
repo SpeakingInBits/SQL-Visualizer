@@ -1,0 +1,7 @@
+{
+  "id": "joins",
+  "title": "Joining Tables",
+  "description": "Combine rows from related tables with INNER JOIN, aliases, and multi-table chains — then watch each join form step by step.",
+  "database": "school",
+  "order": 1
+}

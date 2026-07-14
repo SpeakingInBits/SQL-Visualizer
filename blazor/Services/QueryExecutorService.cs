@@ -26,6 +26,15 @@ public class QueryExecutorService
         return ExecuteStatement(c, sql);
     }
 
+    /// <summary>True when a query has a structure the visualizer can animate — i.e. it
+    /// reads rows (SELECT / WITH). DML and other statements have nothing to show.</summary>
+    public static bool IsVisualizable(string sql)
+    {
+        if (string.IsNullOrWhiteSpace(sql)) return false;
+        var t = sql.TrimStart().ToUpperInvariant();
+        return t.StartsWith("SELECT") || t.StartsWith("WITH");
+    }
+
     public VizResult VisualizeQuery(string sql)
     {
         var c = _conn.Require();

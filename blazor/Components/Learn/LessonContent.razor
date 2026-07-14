@@ -1,0 +1,48 @@
+@using System.Text.RegularExpressions
+@using Markdig
+
+@foreach (var seg in _segments)
+{
+    @if (seg.IsSql)
+    {
+        <LessonCell Code="@seg.Content" />
+    }
+    else
+    {
+        @((MarkupString)RenderMarkdown(seg.Content))
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public string Content { get; set; } = "";
+
+    private List<(bool IsSql, string Content)> _segments = new();
+
+    private static readonly MarkdownPipeline Pipeline =
+        new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
+
+    // Matches a fenced ```sql … ``` block; group 1 is the SQL body.
+    private static readonly Regex SqlBlock =
+        new(@"```sql\r?\n([\s\S]*?)\r?\n```", RegexOptions.Multiline);
+
+    protected override void OnParametersSet() => _segments = Parse(Content);
+
+    private static string RenderMarkdown(string md) =>
+        string.IsNullOrWhiteSpace(md) ? "" : Markdown.ToHtml(md, Pipeline);
+
+    private static List<(bool, string)> Parse(string content)
+    {
+        var segments = new List<(bool, string)>();
+        if (string.IsNullOrEmpty(content)) return segments;
+
+        int last = 0;
+        foreach (Match m in SqlBlock.Matches(content))
+        {
+            if (m.Index > last) segments.Add((false, content[last..m.Index]));
+            segments.Add((true, m.Groups[1].Value));
+            last = m.Index + m.Length;
+        }
+        if (last < content.Length) segments.Add((false, content[last..]));
+        return segments;
+    }
+}

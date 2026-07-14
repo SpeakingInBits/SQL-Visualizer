@@ -1,3 +1,14 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
 
-@Body
+<div class="app-shell">
+    <header class="app-topbar">
+        <span class="app-brand">⚡ SQL Visualizer</span>
+        <nav class="app-nav">
+            <NavLink class="app-navlink" href="" Match="NavLinkMatch.All">Playground</NavLink>
+            <NavLink class="app-navlink" href="learn">Learn</NavLink>
+        </nav>
+    </header>
+    <div class="app-body">
+        @Body
+    </div>
+</div>

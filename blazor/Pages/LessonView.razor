@@ -1,0 +1,87 @@
+@page "/learn/{Id}"
+@using SqlVisualizer.Components.Learn
+@inject ContentService Content
+@inject SampleDatabaseService SampleSvc
+@inject SqliteConnectionService ConnSvc
+
+<PageTitle>@(_lesson?.Meta.Title ?? "Lesson") — SQL Visualizer</PageTitle>
+
+<div class="learn-page lesson-view">
+    @if (_loading)
+    {
+        <p class="learn-status">Loading lesson…</p>
+    }
+    else if (_lesson == null)
+    {
+        <div class="learn-error">Lesson not found. <a href="learn">← All lessons</a></div>
+    }
+    else
+    {
+        <div class="lesson-topline">
+            <a class="lesson-back" href="learn">← All lessons</a>
+            <div class="lesson-db">
+                <span>Database:</span>
+                <strong>@ConnSvc.Status.DisplayName</strong>
+                @if (_dbError == null)
+                {
+                    <span class="db-ok">loaded</span>
+                }
+                else
+                {
+                    <span class="db-err">@_dbError</span>
+                }
+                <button class="btn-secondary db-reset" @onclick="ResetDatabase" title="Re-seed the database">↺ Reset</button>
+            </div>
+        </div>
+
+        <h1 class="lesson-title">@_lesson.Meta.Title</h1>
+
+        <article class="lesson-body">
+            <LessonContent Content="@_lesson.Content" />
+        </article>
+    }
+</div>
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+
+    private Lesson? _lesson;
+    private bool _loading = true;
+    private string? _dbError;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _lesson = null;
+        _dbError = null;
+        try
+        {
+            _lesson = await Content.LoadLessonAsync(Id);
+            EnsureDatabase(_lesson.Meta.Database);
+        }
+        catch (Exception ex) { _dbError = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    // Open the lesson's sample DB if it isn't already the active connection.
+    private void EnsureDatabase(string db)
+    {
+        if (string.IsNullOrEmpty(db)) return;
+        var current = ConnSvc.Status;
+        bool already = current.Connected &&
+                       (current.DisplayName?.StartsWith(db, StringComparison.OrdinalIgnoreCase) ?? false);
+        if (!already)
+        {
+            try { SampleSvc.OpenSample(db); }
+            catch (Exception ex) { _dbError = ex.Message; }
+        }
+    }
+
+    private void ResetDatabase()
+    {
+        if (_lesson == null) return;
+        _dbError = null;
+        try { SampleSvc.OpenSample(_lesson.Meta.Database); }
+        catch (Exception ex) { _dbError = ex.Message; }
+    }
+}

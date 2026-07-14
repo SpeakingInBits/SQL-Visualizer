@@ -1,0 +1,135 @@
+@using BlazorMonaco
+@using BlazorMonaco.Editor
+@inject QueryExecutorService Executor
+@inject SceneBuilderService SceneBuilder
+@inject SqliteConnectionService ConnSvc
+
+<div class="lesson-cell">
+    <div class="lc-toolbar">
+        <button class="btn-run" disabled="@(!Connected || _loading)" @onclick="Run">▶ Run</button>
+        <button class="btn-visualize" disabled="@(!Connected || _loading || !_canVisualize)"
+                title="@(_canVisualize ? "Animate this query" : "Only SELECT queries can be visualized")"
+                @onclick="Visualize">⚡ Visualize</button>
+        @if (_loading) { <span class="lc-hint">Running…</span> }
+        @if (!Connected) { <span class="lc-hint">Connect a database to run.</span> }
+        @if (_error != null) { <span class="lc-error">@_error</span> }
+    </div>
+
+    <div class="lc-editor" style="height:@(_editorHeight)px">
+        <StandaloneCodeEditor @ref="_editor" Id="@_editorId"
+                              ConstructionOptions="EditorOptions" OnKeyDown="OnKeyDown" />
+    </div>
+
+    @if (_result != null)
+    {
+        <div class="lc-results">
+            @if (_result.Type == "DML")
+            {
+                <div class="lc-dml">✓ @_result.RowsAffected @(_result.RowsAffected == 1 ? "row" : "rows") affected.</div>
+            }
+            else if (_result.Columns.Count == 0)
+            {
+                <div class="lc-dml">✓ Done.</div>
+            }
+            else
+            {
+                @if (_result.Truncated) { <div class="lc-trunc">⚠ Truncated to 200 rows.</div> }
+                <div class="lc-table-wrap">
+                    <table class="results-table">
+                        <thead>
+                            <tr>@foreach (var col in _result.Columns) { <th>@col.Name</th> }</tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in _result.Rows)
+                            {
+                                <tr>
+                                    @foreach (var col in _result.Columns)
+                                    {
+                                        <td>@(row.TryGetValue(col.Name, out var v) ? v?.ToString() ?? "NULL" : "")</td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <div class="lc-rowcount">@_result.Rows.Count row(s)</div>
+            }
+        </div>
+    }
+</div>
+
+@if (_scene != null)
+{
+    <VizModal Scene="_scene" OnClose="() => _scene = null" />
+}
+
+@code {
+    [Parameter, EditorRequired] public string Code { get; set; } = "";
+
+    private StandaloneCodeEditor? _editor;
+    private readonly string _editorId = $"cell-{Guid.NewGuid():N}";
+    private PlainResult? _result;
+    private VizScene? _scene;
+    private bool _loading;
+    private string? _error;
+    private int _editorHeight = 80;
+
+    private bool Connected => ConnSvc.Status.Connected;
+    private bool _canVisualize;
+
+    protected override void OnParametersSet()
+    {
+        var trimmed = Code.Trim();
+        int lines = trimmed.Length == 0 ? 1 : trimmed.Split('\n').Length;
+        _editorHeight = Math.Clamp(lines, 2, 18) * 20 + 20;
+        _canVisualize = QueryExecutorService.IsVisualizable(trimmed);
+    }
+
+    private StandaloneEditorConstructionOptions EditorOptions(StandaloneCodeEditor _) =>
+        new()
+        {
+            Language = "sql",
+            Theme = "vs-dark",
+            Value = Code.Trim(),
+            Minimap = new EditorMinimapOptions { Enabled = false },
+            LineNumbers = "off",
+            FontFamily = "JetBrains Mono, Cascadia Code, Consolas, monospace",
+            FontSize = 13,
+            ScrollBeyondLastLine = false,
+            AutomaticLayout = true
+        };
+
+    private async Task OnKeyDown(KeyboardEvent e)
+    {
+        if (e.CtrlKey && e.Code == "Enter") await Run();
+    }
+
+    private async Task<string> CurrentSql()
+        => _editor != null ? (await _editor.GetValue() ?? "") : Code;
+
+    private async Task Run()
+    {
+        var sql = (await CurrentSql()).Trim();
+        if (sql.Length == 0 || !Connected) return;
+        _loading = true; _error = null; _result = null;
+        StateHasChanged();
+        try { _result = Executor.RunStatement(sql); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private async Task Visualize()
+    {
+        var sql = (await CurrentSql()).Trim();
+        if (sql.Length == 0 || !Connected) return;
+        _loading = true; _error = null;
+        StateHasChanged();
+        try
+        {
+            var viz = Executor.VisualizeQuery(sql);
+            _scene = SceneBuilder.Build(viz);
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+}

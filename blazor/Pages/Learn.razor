@@ -1,0 +1,56 @@
+@page "/learn"
+@using SqlVisualizer.Components.Learn
+@inject ContentService Content
+
+<PageTitle>Learn SQL — SQL Visualizer</PageTitle>
+
+<div class="learn-page">
+    <header class="learn-hero">
+        <h1>Learn SQL</h1>
+        <p>Work through interactive lessons. Every query runs live against a sample database —
+           hit <strong>⚡ Visualize</strong> on any cell to watch it animate.</p>
+    </header>
+
+    @if (_loading)
+    {
+        <p class="learn-status">Loading lessons…</p>
+    }
+    else if (_error != null)
+    {
+        <div class="learn-error">Could not load lessons: @_error</div>
+    }
+    else if (_lessons.Count == 0)
+    {
+        <p class="learn-status">No lessons yet.</p>
+    }
+    else
+    {
+        <div class="lesson-grid">
+            @foreach (var l in _lessons)
+            {
+                <a class="lesson-card" href="learn/@l.Id">
+                    <span class="lc-badge">@l.Database</span>
+                    <h3>@l.Title</h3>
+                    <p>@l.Description</p>
+                </a>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<LessonMeta> _lessons = new();
+    private bool _loading = true;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var manifest = await Content.LoadManifestAsync();
+            _lessons = manifest.Lessons.OrderBy(l => l.Order).ToList();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+}
