@@ -367,15 +367,31 @@ public class QueryExecutorService
             if (rows.Count >= MaxJoinRows) truncated = true;
         }
 
-        // Build one JoinStep per join, matching table[k] rows to table[k+1] rows
+        // Map each table name / alias → its index, so an ON condition can be tied
+        // back to whichever already-joined table it references (not necessarily the
+        // immediately-preceding one, as in star/snowflake shapes).
+        var refToIdx = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        for (int k = 0; k < tableNames.Count; k++)
+        {
+            refToIdx[tableNames[k]] = k;
+            if (aliases[k] != null) refToIdx[aliases[k]!] = k;
+        }
+
+        // Build one JoinStep per join, adding table[k+1] and matching its rows to the
+        // rows of whichever prior table the ON condition's left side references.
         var steps = new List<JoinStep>();
         for (int k = 0; k < onConds.Count; k++)
         {
-            var (leftKey, rightKey) = ParseJoinKeys(onConds[k], aliases[k + 1] ?? tableNames[k + 1]);
+            var (leftRef, leftKey, rightKey) = ParseJoinKeys(onConds[k], aliases[k + 1] ?? tableNames[k + 1]);
+            // Resolve the prior table the left key lives on; fall back to table[k]
+            // when the reference can't be resolved to an already-joined table.
+            int leftIdx = k;
+            if (leftRef != null && refToIdx.TryGetValue(leftRef, out var ri0) && ri0 <= k) leftIdx = ri0;
+
             var pairs = new List<(int L, int R)>();
             if (leftKey != null && rightKey != null)
             {
-                var left = tableRows[k];
+                var left = tableRows[leftIdx];
                 var right = tableRows[k + 1];
                 for (int li = 0; li < left.Count; li++)
                 {
@@ -387,7 +403,7 @@ public class QueryExecutorService
                     }
                 }
             }
-            steps.Add(new JoinStep(joinTypes[k], onConds[k], leftKey, rightKey, pairs));
+            steps.Add(new JoinStep(joinTypes[k], onConds[k], leftKey, rightKey, pairs, leftIdx));
         }
 
         // Enumerate inner-join paths (nested loop, first table outer) so each
@@ -440,7 +456,7 @@ public class QueryExecutorService
             var next = new List<List<int>>();
             foreach (var p in partial)
             {
-                if (adj.TryGetValue(p[^1], out var rs))
+                if (adj.TryGetValue(p[step.LeftTableIndex], out var rs))
                     foreach (var r in rs)
                     {
                         next.Add(new List<int>(p) { r });
@@ -544,17 +560,20 @@ public class QueryExecutorService
         return parts.Where(p => p.Trim().Length > 0).ToList();
     }
 
-    /// <summary>Parses an ON condition, returning (leftKey on table k, rightKey on table k+1).</summary>
-    private static (string?, string?) ParseJoinKeys(string onCondition, string newTableRef)
+    /// <summary>Parses an ON condition, returning the ref (table name/alias) and column
+    /// on the prior-table side, plus the column on the newly-joined table.</summary>
+    private static (string? LeftRef, string? LeftKey, string? RightKey) ParseJoinKeys(
+        string onCondition, string newTableRef)
     {
         var m = Regex.Match(onCondition, @"(\w+)\.(\w+)\s*=\s*(\w+)\.(\w+)");
-        if (!m.Success) return (null, null);
+        if (!m.Success) return (null, null, null);
         string aRef = m.Groups[1].Value, aCol = m.Groups[2].Value;
         string bRef = m.Groups[3].Value, bCol = m.Groups[4].Value;
-        // The side referencing the newly-joined table is the "right" key
-        if (string.Equals(bRef, newTableRef, StringComparison.OrdinalIgnoreCase)) return (aCol, bCol);
-        if (string.Equals(aRef, newTableRef, StringComparison.OrdinalIgnoreCase)) return (bCol, aCol);
-        return (aCol, bCol);
+        // The side referencing the newly-joined table is the "right" key; the other
+        // side is the "left" key and its ref tells us which prior table it lives on.
+        if (string.Equals(bRef, newTableRef, StringComparison.OrdinalIgnoreCase)) return (aRef, aCol, bCol);
+        if (string.Equals(aRef, newTableRef, StringComparison.OrdinalIgnoreCase)) return (bRef, bCol, aCol);
+        return (aRef, aCol, bCol);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

@@ -356,11 +356,13 @@ public class SceneBuilderService
             var segs = new List<int>();
             for (int k = 0; k < t - 1; k++)
             {
-                int L = p[k], R = p[k + 1];
-                if (L < tableRowIds[k].Count && R < tableRowIds[k + 1].Count)
+                // Connect the new table[k+1] to whichever prior table its join references.
+                int leftIdx = j.Steps[k].LeftTableIndex;
+                int L = p[leftIdx], R = p[k + 1];
+                if (L < tableRowIds[leftIdx].Count && R < tableRowIds[k + 1].Count)
                 {
                     segs.Add(edges.Count);
-                    edges.Add(new VizEdge(tableRowIds[k][L], tableRowIds[k + 1][R]));
+                    edges.Add(new VizEdge(tableRowIds[leftIdx][L], tableRowIds[k + 1][R]));
                 }
             }
             pathEdges.Add(segs);

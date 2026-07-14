@@ -73,13 +73,16 @@ public record WhereOrderByResult(
     List<string> SortKeys)
     : VizResult("where_order_by");
 
-/// One JOIN in a chain: matches rows of table[k] to table[k+1].
+/// One JOIN in a chain, adding table[k+1]. Its ON condition references some
+/// already-joined table[LeftTableIndex] (usually k, but earlier for star/snowflake
+/// shapes). MatchPairs are (row in table[LeftTableIndex], row in table[k+1]).
 public record JoinStep(
     string JoinType,
     string OnCondition,
     string? LeftKey,
     string? RightKey,
-    List<(int L, int R)> MatchPairs);
+    List<(int L, int R)> MatchPairs,
+    int LeftTableIndex);
 
 /// A chain of one or more joins across N tables laid out left-to-right.
 public record JoinChainResult(
