@@ -378,15 +378,12 @@ public class QueryExecutorService
         }
 
         // Build one JoinStep per join, adding table[k+1] and matching its rows to the
-        // rows of whichever prior table the ON condition's left side references.
+        // rows of whichever prior table the ON condition references.
         var steps = new List<JoinStep>();
         for (int k = 0; k < onConds.Count; k++)
         {
-            var (leftRef, leftKey, rightKey) = ParseJoinKeys(onConds[k], aliases[k + 1] ?? tableNames[k + 1]);
-            // Resolve the prior table the left key lives on; fall back to table[k]
-            // when the reference can't be resolved to an already-joined table.
-            int leftIdx = k;
-            if (leftRef != null && refToIdx.TryGetValue(leftRef, out var ri0) && ri0 <= k) leftIdx = ri0;
+            var (leftIdx, leftKey, rightKey) =
+                ResolveJoinKeys(onConds[k], k + 1, tableCols, refToIdx);
 
             var pairs = new List<(int L, int R)>();
             if (leftKey != null && rightKey != null)
@@ -560,20 +557,52 @@ public class QueryExecutorService
         return parts.Where(p => p.Trim().Length > 0).ToList();
     }
 
-    /// <summary>Parses an ON condition, returning the ref (table name/alias) and column
-    /// on the prior-table side, plus the column on the newly-joined table.</summary>
-    private static (string? LeftRef, string? LeftKey, string? RightKey) ParseJoinKeys(
-        string onCondition, string newTableRef)
+    /// <summary>Resolves an equi-join ON condition into the prior-table index and its
+    /// key column, plus the key column on the newly-joined table[newIdx]. Handles both
+    /// qualified (t.col) and unqualified (col) operands, disambiguating bare columns by
+    /// which table actually holds them. Falls back to the previous table if unresolved.</summary>
+    private static (int LeftIdx, string? LeftKey, string? RightKey) ResolveJoinKeys(
+        string onCondition, int newIdx,
+        List<List<ColumnHeader>> tableCols, Dictionary<string, int> refToIdx)
     {
-        var m = Regex.Match(onCondition, @"(\w+)\.(\w+)\s*=\s*(\w+)\.(\w+)");
-        if (!m.Success) return (null, null, null);
+        var m = Regex.Match(onCondition, @"(?:(\w+)\.)?(\w+)\s*=\s*(?:(\w+)\.)?(\w+)");
+        if (!m.Success) return (newIdx - 1, null, null);
         string aRef = m.Groups[1].Value, aCol = m.Groups[2].Value;
         string bRef = m.Groups[3].Value, bCol = m.Groups[4].Value;
-        // The side referencing the newly-joined table is the "right" key; the other
-        // side is the "left" key and its ref tells us which prior table it lives on.
-        if (string.Equals(bRef, newTableRef, StringComparison.OrdinalIgnoreCase)) return (aRef, aCol, bCol);
-        if (string.Equals(aRef, newTableRef, StringComparison.OrdinalIgnoreCase)) return (bRef, bCol, aCol);
-        return (aRef, aCol, bCol);
+
+        int RefIdx(string r) => r.Length > 0 && refToIdx.TryGetValue(r, out var i) ? i : -1;
+        int aIdx = RefIdx(aRef), bIdx = RefIdx(bRef);
+
+        // Decide which operand keys the newly-joined table: prefer an explicit ref, then
+        // a ref pointing at a prior table (so the other side is the new one), and finally
+        // fall back to column membership when both sides are unqualified.
+        bool aIsNew;
+        if (aIdx == newIdx) aIsNew = true;
+        else if (bIdx == newIdx) aIsNew = false;
+        else if (bIdx >= 0 && bIdx < newIdx) aIsNew = true;
+        else if (aIdx >= 0 && aIdx < newIdx) aIsNew = false;
+        else aIsNew = ColInTable(tableCols[newIdx], aCol) && !ColInTable(tableCols[newIdx], bCol);
+
+        var (newCol, leftCol, leftRefIdx) = aIsNew ? (aCol, bCol, bIdx) : (bCol, aCol, aIdx);
+
+        // Resolve the prior table for the left key when it wasn't qualified.
+        int leftIdx = leftRefIdx;
+        if (leftIdx < 0 || leftIdx >= newIdx)
+            leftIdx = FindPriorTableWithColumn(tableCols, leftCol, newIdx);
+        if (leftIdx < 0) leftIdx = newIdx - 1;
+
+        return (leftIdx, leftCol, newCol);
+    }
+
+    private static bool ColInTable(List<ColumnHeader> cols, string col)
+        => cols.Any(c => string.Equals(c.Name, col, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Finds a table with index &lt; beforeIdx that contains the given column.</summary>
+    private static int FindPriorTableWithColumn(List<List<ColumnHeader>> tableCols, string col, int beforeIdx)
+    {
+        for (int k = beforeIdx - 1; k >= 0; k--)
+            if (ColInTable(tableCols[k], col)) return k;
+        return -1;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
