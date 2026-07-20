@@ -1,0 +1,209 @@
+{
+  "problems": [
+    {
+      "id": "dd01",
+      "type": "state",
+      "prompt": "Create a table `pets` with columns: `id` INTEGER PRIMARY KEY, `name` TEXT NOT NULL, `species` TEXT.",
+      "hint": "`CREATE TABLE pets ( … );` — columns in exactly that order.",
+      "solution": "CREATE TABLE pets (id INTEGER PRIMARY KEY, name TEXT NOT NULL, species TEXT);",
+      "verify": "SELECT name, UPPER(type) AS type, \"notnull\", pk FROM pragma_table_info('pets') ORDER BY cid;"
+    },
+    {
+      "id": "dd02",
+      "type": "state",
+      "prompt": "Create a table `owners` with `id` INTEGER PRIMARY KEY, `name` TEXT NOT NULL, and an `email` TEXT column that must be **unique**.",
+      "hint": "Add the `UNIQUE` keyword after the email column's type.",
+      "solution": "CREATE TABLE owners (id INTEGER PRIMARY KEY, name TEXT NOT NULL, email TEXT UNIQUE);",
+      "verify": "SELECT (SELECT COUNT(*) FROM pragma_index_list('owners') WHERE \"unique\" = 1) AS unique_indexes, (SELECT COUNT(*) FROM pragma_table_info('owners')) AS column_count;"
+    },
+    {
+      "id": "dd03",
+      "type": "state",
+      "prompt": "Create a table `tasks`: `id` INTEGER PRIMARY KEY, `title` TEXT NOT NULL, `status` TEXT NOT NULL with a **default of** `'todo'` (single quotes), and `created` TEXT.",
+      "hint": "`status TEXT NOT NULL DEFAULT 'todo'`.",
+      "solution": "CREATE TABLE tasks (id INTEGER PRIMARY KEY, title TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'todo', created TEXT);",
+      "verify": "SELECT name, UPPER(type) AS type, \"notnull\", dflt_value FROM pragma_table_info('tasks') ORDER BY cid;"
+    },
+    {
+      "id": "dd04",
+      "type": "state",
+      "prompt": "Create a table `products` with `id` INTEGER PRIMARY KEY, `name` TEXT NOT NULL, and `price` REAL with a **CHECK** constraint requiring `price >= 0`.",
+      "hint": "`price REAL CHECK (price >= 0)`.",
+      "solution": "CREATE TABLE products (id INTEGER PRIMARY KEY, name TEXT NOT NULL, price REAL CHECK (price >= 0));",
+      "verify": "SELECT (SELECT COUNT(*) FROM pragma_table_info('products')) AS column_count, (SELECT COUNT(*) FROM sqlite_master WHERE name = 'products' AND sql LIKE '%CHECK%') AS has_check;"
+    },
+    {
+      "id": "dd05",
+      "type": "state",
+      "prompt": "Create two related tables: `owners` (`id` INTEGER PRIMARY KEY, `name` TEXT NOT NULL) and `dogs` (`id` INTEGER PRIMARY KEY, `name` TEXT NOT NULL, `owner_id` INTEGER with a **foreign key** referencing `owners(id)`).",
+      "hint": "`owner_id INTEGER REFERENCES owners(id)`.",
+      "solution": "CREATE TABLE owners (id INTEGER PRIMARY KEY, name TEXT NOT NULL); CREATE TABLE dogs (id INTEGER PRIMARY KEY, name TEXT NOT NULL, owner_id INTEGER REFERENCES owners(id));",
+      "verify": "SELECT \"table\", \"from\", \"to\" FROM pragma_foreign_key_list('dogs');"
+    },
+    {
+      "id": "dd06",
+      "type": "state",
+      "prompt": "Create a link table `enrollments` with `student_id` INTEGER and `course_id` INTEGER, using a **composite primary key** over both columns.",
+      "hint": "Declare it at the end: `PRIMARY KEY (student_id, course_id)`.",
+      "solution": "CREATE TABLE enrollments (student_id INTEGER, course_id INTEGER, PRIMARY KEY (student_id, course_id));",
+      "verify": "SELECT name, pk FROM pragma_table_info('enrollments') ORDER BY cid;"
+    },
+    {
+      "id": "dd07",
+      "type": "state",
+      "prompt": "The starter code creates a `books` table. **Add a column** `pages` of type INTEGER to it.",
+      "hint": "`ALTER TABLE books ADD COLUMN pages INTEGER;`",
+      "starter": "CREATE TABLE books (id INTEGER PRIMARY KEY, title TEXT NOT NULL);\n\n-- your ALTER statement here:\n",
+      "solution": "CREATE TABLE books (id INTEGER PRIMARY KEY, title TEXT NOT NULL); ALTER TABLE books ADD COLUMN pages INTEGER;",
+      "verify": "SELECT name, UPPER(type) AS type FROM pragma_table_info('books') ORDER BY cid;"
+    },
+    {
+      "id": "dd08",
+      "type": "state",
+      "prompt": "The starter creates a table named `customer`. **Rename the table** to `customers`.",
+      "hint": "`ALTER TABLE customer RENAME TO customers;`",
+      "starter": "CREATE TABLE customer (id INTEGER PRIMARY KEY, name TEXT NOT NULL);\n\n-- your ALTER statement here:\n",
+      "solution": "CREATE TABLE customer (id INTEGER PRIMARY KEY, name TEXT NOT NULL); ALTER TABLE customer RENAME TO customers;",
+      "verify": "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name;"
+    },
+    {
+      "id": "dd09",
+      "type": "state",
+      "prompt": "The starter creates `members` with a badly named column `fullname`. **Rename the column** to `full_name`.",
+      "hint": "`ALTER TABLE members RENAME COLUMN fullname TO full_name;`",
+      "starter": "CREATE TABLE members (id INTEGER PRIMARY KEY, fullname TEXT NOT NULL);\n\n-- your ALTER statement here:\n",
+      "solution": "CREATE TABLE members (id INTEGER PRIMARY KEY, fullname TEXT NOT NULL); ALTER TABLE members RENAME COLUMN fullname TO full_name;",
+      "verify": "SELECT name FROM pragma_table_info('members') ORDER BY cid;"
+    },
+    {
+      "id": "dd10",
+      "type": "state",
+      "prompt": "The starter creates `settings` with an obsolete `legacy` column. **Drop that column**.",
+      "hint": "`ALTER TABLE settings DROP COLUMN legacy;`",
+      "starter": "CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT, legacy TEXT);\n\n-- your ALTER statement here:\n",
+      "solution": "CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT, legacy TEXT); ALTER TABLE settings DROP COLUMN legacy;",
+      "verify": "SELECT name FROM pragma_table_info('settings') ORDER BY cid;"
+    },
+    {
+      "id": "dd11",
+      "type": "state",
+      "prompt": "The starter creates `keep_data` and `temp_data`. **Drop** the `temp_data` table (and only that one).",
+      "hint": "`DROP TABLE temp_data;`",
+      "starter": "CREATE TABLE keep_data (id INTEGER PRIMARY KEY, info TEXT);\nCREATE TABLE temp_data (id INTEGER PRIMARY KEY, junk TEXT);\n\n-- your DROP statement here:\n",
+      "solution": "CREATE TABLE keep_data (id INTEGER PRIMARY KEY, info TEXT); CREATE TABLE temp_data (id INTEGER PRIMARY KEY, junk TEXT); DROP TABLE temp_data;",
+      "verify": "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name;"
+    },
+    {
+      "id": "dd12",
+      "type": "state",
+      "prompt": "The starter creates an `events` table. Create an index named `idx_events_date` on its `event_date` column.",
+      "hint": "`CREATE INDEX idx_events_date ON events(event_date);`",
+      "starter": "CREATE TABLE events (id INTEGER PRIMARY KEY, name TEXT, event_date TEXT);\n\n-- your CREATE INDEX statement here:\n",
+      "solution": "CREATE TABLE events (id INTEGER PRIMARY KEY, name TEXT, event_date TEXT); CREATE INDEX idx_events_date ON events(event_date);",
+      "verify": "SELECT name FROM sqlite_master WHERE type = 'index' AND name NOT LIKE 'sqlite_%' ORDER BY name;"
+    },
+    {
+      "id": "dd13",
+      "type": "state",
+      "prompt": "The starter creates a `users` table. Create a **unique** index named `idx_users_email` on its `email` column.",
+      "hint": "`CREATE UNIQUE INDEX idx_users_email ON users(email);`",
+      "starter": "CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT NOT NULL);\n\n-- your statement here:\n",
+      "solution": "CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT NOT NULL); CREATE UNIQUE INDEX idx_users_email ON users(email);",
+      "verify": "SELECT name, \"unique\" FROM pragma_index_list('users') WHERE name NOT LIKE 'sqlite_%';"
+    },
+    {
+      "id": "dd14",
+      "type": "state",
+      "prompt": "The starter creates an `orders` table. Create a **multi-column** index named `idx_orders_cust_date` on `customer_id` then `order_date` (in that order).",
+      "hint": "List both columns in the parentheses, comma-separated.",
+      "starter": "CREATE TABLE orders (id INTEGER PRIMARY KEY, customer_id INTEGER, order_date TEXT);\n\n-- your statement here:\n",
+      "solution": "CREATE TABLE orders (id INTEGER PRIMARY KEY, customer_id INTEGER, order_date TEXT); CREATE INDEX idx_orders_cust_date ON orders(customer_id, order_date);",
+      "verify": "SELECT name FROM pragma_index_info('idx_orders_cust_date') ORDER BY seqno;"
+    },
+    {
+      "id": "dd15",
+      "type": "state",
+      "prompt": "The starter creates and fills a `tasks` table. Create a **view** named `open_tasks` that shows the `id` and `title` of tasks whose status is `'todo'`.",
+      "hint": "`CREATE VIEW open_tasks AS SELECT id, title FROM tasks WHERE status = 'todo';`",
+      "starter": "CREATE TABLE tasks (id INTEGER PRIMARY KEY, title TEXT, status TEXT DEFAULT 'todo');\nINSERT INTO tasks (title, status) VALUES ('write schema', 'todo'), ('ship feature', 'done'), ('add indexes', 'todo');\n\n-- your CREATE VIEW statement here:\n",
+      "solution": "CREATE TABLE tasks (id INTEGER PRIMARY KEY, title TEXT, status TEXT DEFAULT 'todo'); INSERT INTO tasks (title, status) VALUES ('write schema', 'todo'), ('ship feature', 'done'), ('add indexes', 'todo'); CREATE VIEW open_tasks AS SELECT id, title FROM tasks WHERE status = 'todo';",
+      "verify": "SELECT id, title FROM open_tasks ORDER BY id;"
+    },
+    {
+      "id": "dd16",
+      "type": "state",
+      "prompt": "The starter creates a table and an outdated view `old_report`. **Drop the view** (keep the table!).",
+      "hint": "`DROP VIEW old_report;`",
+      "starter": "CREATE TABLE sales (id INTEGER PRIMARY KEY, amount REAL);\nCREATE VIEW old_report AS SELECT SUM(amount) FROM sales;\n\n-- your DROP statement here:\n",
+      "solution": "CREATE TABLE sales (id INTEGER PRIMARY KEY, amount REAL); CREATE VIEW old_report AS SELECT SUM(amount) FROM sales; DROP VIEW old_report;",
+      "verify": "SELECT (SELECT COUNT(*) FROM sqlite_master WHERE type = 'view') AS views_left, (SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'sales') AS table_kept;"
+    },
+    {
+      "id": "dd17",
+      "type": "state",
+      "prompt": "The starter fills a `logs` table. Using **CREATE TABLE … AS SELECT**, snapshot all rows with level `'error'` into a new table `error_logs`.",
+      "hint": "`CREATE TABLE error_logs AS SELECT * FROM logs WHERE level = 'error';`",
+      "starter": "CREATE TABLE logs (id INTEGER PRIMARY KEY, level TEXT, message TEXT);\nINSERT INTO logs VALUES (1,'info','started'), (2,'error','disk full'), (3,'info','tick'), (4,'error','timeout');\n\n-- your statement here:\n",
+      "solution": "CREATE TABLE logs (id INTEGER PRIMARY KEY, level TEXT, message TEXT); INSERT INTO logs VALUES (1,'info','started'), (2,'error','disk full'), (3,'info','tick'), (4,'error','timeout'); CREATE TABLE error_logs AS SELECT * FROM logs WHERE level = 'error';",
+      "verify": "SELECT id, level, message FROM error_logs ORDER BY id;"
+    },
+    {
+      "id": "dd18",
+      "type": "state",
+      "prompt": "Design a tiny blog schema: `authors` (`id` INTEGER PRIMARY KEY, `name` TEXT NOT NULL) and `posts` (`id` INTEGER PRIMARY KEY, `author_id` INTEGER referencing `authors(id)`, `title` TEXT NOT NULL, `body` TEXT).",
+      "hint": "Two CREATE TABLE statements; the foreign key uses `REFERENCES authors(id)`.",
+      "solution": "CREATE TABLE authors (id INTEGER PRIMARY KEY, name TEXT NOT NULL); CREATE TABLE posts (id INTEGER PRIMARY KEY, author_id INTEGER REFERENCES authors(id), title TEXT NOT NULL, body TEXT);",
+      "verify": "SELECT \"table\", \"from\", \"to\" FROM pragma_foreign_key_list('posts');"
+    },
+    {
+      "id": "dd19",
+      "type": "state",
+      "prompt": "Auto-numbering: create a table `tags` (`id` INTEGER PRIMARY KEY, `name` TEXT NOT NULL), then insert the names `sql` and `wasm` **without specifying ids** — SQLite numbers them 1 and 2 for you.",
+      "hint": "`INSERT INTO tags (name) VALUES ('sql');` — leave `id` out entirely.",
+      "solution": "CREATE TABLE tags (id INTEGER PRIMARY KEY, name TEXT NOT NULL); INSERT INTO tags (name) VALUES ('sql'); INSERT INTO tags (name) VALUES ('wasm');",
+      "verify": "SELECT id, name FROM tags ORDER BY id;"
+    },
+    {
+      "id": "dd20",
+      "type": "state",
+      "prompt": "Defaults in action: create `settings` (`key` TEXT PRIMARY KEY, `value` TEXT NOT NULL DEFAULT `'on'`), then insert a row providing **only** the key `'dark_mode'`.",
+      "hint": "The DEFAULT fills in `value` when your INSERT omits it.",
+      "solution": "CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT 'on'); INSERT INTO settings (key) VALUES ('dark_mode');",
+      "verify": "SELECT key, value FROM settings;"
+    },
+    {
+      "id": "dd21",
+      "type": "state",
+      "prompt": "Create `ratings` (`id` INTEGER PRIMARY KEY, `stars` INTEGER with a CHECK that stars is **between 1 and 5**), then insert one valid row: id 1, stars 4.",
+      "hint": "`stars INTEGER CHECK (stars BETWEEN 1 AND 5)`.",
+      "solution": "CREATE TABLE ratings (id INTEGER PRIMARY KEY, stars INTEGER CHECK (stars BETWEEN 1 AND 5)); INSERT INTO ratings VALUES (1, 4);",
+      "verify": "SELECT (SELECT COUNT(*) FROM sqlite_master WHERE name = 'ratings' AND sql LIKE '%CHECK%') AS has_check, (SELECT stars FROM ratings WHERE id = 1) AS first_rating;"
+    },
+    {
+      "id": "dd22",
+      "type": "state",
+      "prompt": "Migration recipe: the starter creates `scores` where `points` is TEXT. Rebuild it so `points` is INTEGER, keeping the data: rename the old table, create the new shape, copy with `INSERT … SELECT` (CAST the points), drop the old table.",
+      "hint": "`ALTER TABLE scores RENAME TO scores_old;` → `CREATE TABLE scores (id INTEGER PRIMARY KEY, points INTEGER);` → `INSERT INTO scores SELECT id, CAST(points AS INTEGER) FROM scores_old;` → `DROP TABLE scores_old;`",
+      "starter": "CREATE TABLE scores (id INTEGER PRIMARY KEY, points TEXT);\nINSERT INTO scores VALUES (1, '10'), (2, '25');\n\n-- your migration here:\n",
+      "solution": "CREATE TABLE scores (id INTEGER PRIMARY KEY, points TEXT); INSERT INTO scores VALUES (1, '10'), (2, '25'); ALTER TABLE scores RENAME TO scores_old; CREATE TABLE scores (id INTEGER PRIMARY KEY, points INTEGER); INSERT INTO scores SELECT id, CAST(points AS INTEGER) FROM scores_old; DROP TABLE scores_old;",
+      "verify": "SELECT (SELECT UPPER(type) FROM pragma_table_info('scores') WHERE name = 'points') AS points_type, (SELECT COUNT(*) FROM scores) AS row_count, (SELECT SUM(points) FROM scores) AS total_points, (SELECT COUNT(*) FROM sqlite_master WHERE type = 'table') AS table_count;"
+    },
+    {
+      "id": "dd23",
+      "type": "state",
+      "prompt": "The starter creates `students` and `courses`. Create the junction table `student_courses` with `student_id` and `course_id` (both INTEGER), a **composite primary key** over both, and a **foreign key from each** to its parent table.",
+      "hint": "Both `REFERENCES` clauses plus `PRIMARY KEY (student_id, course_id)`.",
+      "starter": "CREATE TABLE students (id INTEGER PRIMARY KEY, name TEXT NOT NULL);\nCREATE TABLE courses (id INTEGER PRIMARY KEY, title TEXT NOT NULL);\n\n-- your junction table here:\n",
+      "solution": "CREATE TABLE students (id INTEGER PRIMARY KEY, name TEXT NOT NULL); CREATE TABLE courses (id INTEGER PRIMARY KEY, title TEXT NOT NULL); CREATE TABLE student_courses (student_id INTEGER REFERENCES students(id), course_id INTEGER REFERENCES courses(id), PRIMARY KEY (student_id, course_id));",
+      "verify": "SELECT (SELECT COUNT(*) FROM pragma_foreign_key_list('student_courses')) AS fk_count, (SELECT COUNT(*) FROM pragma_table_info('student_courses') WHERE pk > 0) AS pk_columns;"
+    },
+    {
+      "id": "dd24",
+      "type": "state",
+      "prompt": "The finale — build a mini library schema from scratch: `books` (`id` INTEGER PRIMARY KEY, `title` TEXT NOT NULL), `members` (`id` INTEGER PRIMARY KEY, `name` TEXT NOT NULL), and `checkouts` (`id` INTEGER PRIMARY KEY, `book_id` INTEGER referencing `books(id)`, `member_id` INTEGER referencing `members(id)`, `out_date` TEXT NOT NULL).",
+      "hint": "Three CREATE TABLE statements; `checkouts` carries two foreign keys.",
+      "solution": "CREATE TABLE books (id INTEGER PRIMARY KEY, title TEXT NOT NULL); CREATE TABLE members (id INTEGER PRIMARY KEY, name TEXT NOT NULL); CREATE TABLE checkouts (id INTEGER PRIMARY KEY, book_id INTEGER REFERENCES books(id), member_id INTEGER REFERENCES members(id), out_date TEXT NOT NULL);",
+      "verify": "SELECT (SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('books','members','checkouts')) AS tables_created, (SELECT COUNT(*) FROM pragma_foreign_key_list('checkouts')) AS fk_count;"
+    }
+  ]
+}

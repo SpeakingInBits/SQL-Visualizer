@@ -1,0 +1,9 @@
+{
+  "id": "ddl",
+  "title": "DDL: Creating Tables & Schemas",
+  "description": "CREATE, ALTER, and DROP: define tables, constraints, keys, indexes, and views in an empty sandbox database.",
+  "database": "sandbox",
+  "order": 6,
+  "kind": "lesson",
+  "exerciseCount": 24
+}

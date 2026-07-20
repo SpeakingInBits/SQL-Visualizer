@@ -1,0 +1,9 @@
+{
+  "id": "select-basics",
+  "title": "Select Queries",
+  "description": "The heart of SQL: pick columns with SELECT, filter rows with WHERE, and control the output with ORDER BY and LIMIT.",
+  "database": "movies",
+  "order": 1,
+  "kind": "lesson",
+  "exerciseCount": 30
+}

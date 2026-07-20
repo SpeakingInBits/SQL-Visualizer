@@ -1,0 +1,52 @@
+@inject ProgressService Progress
+
+<section class="practice-section">
+    <h2>Practice</h2>
+    <p class="ps-intro">
+        Work through the exercises below — each one checks your query against the expected
+        result. Solve them all to complete this lesson. Stuck? Every problem has a hint,
+        and you can always peek at the solution.
+    </p>
+
+    <div class="ps-progressline">
+        <div class="ps-bar"><div class="ps-bar-fill" style="width:@(Percent)%"></div></div>
+        <span class="ps-count">@_solvedCount / @Problems.Count solved</span>
+    </div>
+
+    @{ int i = 0; }
+    @foreach (var p in Problems)
+    {
+        i++;
+        <PracticeProblemCell LessonId="@LessonId" DatabaseId="@DatabaseId"
+                             Problem="p" Index="i" OnSolved="OnProblemSolved" />
+    }
+
+    @if (_solvedCount >= Problems.Count && Problems.Count > 0)
+    {
+        <div class="ps-done">🎉 All @Problems.Count exercises solved — lesson complete!</div>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public string LessonId { get; set; } = "";
+    [Parameter, EditorRequired] public string DatabaseId { get; set; } = "";
+    [Parameter, EditorRequired] public List<PracticeProblem> Problems { get; set; } = new();
+    [Parameter] public EventCallback OnAllSolved { get; set; }
+
+    private int _solvedCount;
+    private int Percent => Problems.Count == 0 ? 0 : _solvedCount * 100 / Problems.Count;
+
+    protected override void OnParametersSet()
+        => _solvedCount = Progress.SolvedCount(LessonId);
+
+    private async Task OnProblemSolved()
+    {
+        _solvedCount = Progress.SolvedCount(LessonId);
+        if (_solvedCount >= Problems.Count)
+        {
+            await Progress.MarkLessonCompleteAsync(LessonId);
+            await OnAllSolved.InvokeAsync();
+        }
+        StateHasChanged();
+    }
+}

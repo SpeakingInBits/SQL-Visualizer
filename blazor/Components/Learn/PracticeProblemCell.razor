@@ -1,0 +1,316 @@
+@using BlazorMonaco
+@using BlazorMonaco.Editor
+@using Markdig
+@using System.Globalization
+@using System.Text.RegularExpressions
+@inject QueryExecutorService Executor
+@inject SceneBuilderService SceneBuilder
+@inject SqliteConnectionService ConnSvc
+@inject SampleDatabaseService SampleSvc
+@inject ProgressService Progress
+
+<div class="practice-problem @(_solved ? "pp-solved" : "") @(_open ? "pp-open" : "")">
+    <button class="pp-header" @onclick="Toggle">
+        <span class="pp-status">@(_solved ? "✓" : Index.ToString())</span>
+        <span class="pp-prompt">@((MarkupString)RenderInline(Problem.Prompt))</span>
+        <span class="pp-chevron">@(_open ? "▾" : "▸")</span>
+    </button>
+
+    @if (_open)
+    {
+        <div class="pp-body">
+            <div class="lc-toolbar">
+                <button class="btn-run" disabled="@(!Connected || _busy)" @onclick="Run">▶ Run</button>
+                <button class="btn-check" disabled="@(!Connected || _busy)" @onclick="Check">✓ Check</button>
+                @if (Problem.Type == "query")
+                {
+                    <button class="btn-visualize" disabled="@(!Connected || _busy || !_canVisualize)"
+                            title="@(_canVisualize ? "Animate this query" : "Write a SELECT query first, then Run")"
+                            @onclick="Visualize">⚡ Visualize</button>
+                }
+                <button class="btn-secondary" @onclick="() => _showSchema = !_showSchema">
+                    🗂 @(_showSchema ? "Hide schema" : "Schema")
+                </button>
+                @if (Problem.Hint != null)
+                {
+                    <button class="btn-secondary" @onclick="() => _showHint = !_showHint">💡 Hint</button>
+                }
+                <button class="btn-secondary" @onclick="() => _showSolution = !_showSolution">
+                    @(_showSolution ? "Hide solution" : "Show solution")
+                </button>
+                @if (_busy) { <span class="lc-hint">Working…</span> }
+                @if (!Connected) { <span class="lc-hint">Connect a database to run.</span> }
+            </div>
+
+            @if (_showSchema)
+            {
+                <SchemaPeek />
+            }
+            @if (_showHint && Problem.Hint != null)
+            {
+                <div class="pp-hint">💡 @((MarkupString)RenderInline(Problem.Hint))</div>
+            }
+            @if (_showSolution)
+            {
+                <pre class="pp-solution"><code>@Problem.Solution.Trim()</code></pre>
+            }
+
+            <div class="lc-editor" style="height:@(_editorHeight)px">
+                <StandaloneCodeEditor @ref="_editor" Id="@_editorId"
+                                      ConstructionOptions="EditorOptions" OnKeyDown="OnKeyDown" />
+            </div>
+
+            @if (_feedback != null)
+            {
+                <div class="pp-feedback @(_feedbackOk ? "pp-ok" : "pp-bad")">@_feedback</div>
+            }
+            @if (_error != null)
+            {
+                <div class="pp-feedback pp-bad">@_error</div>
+            }
+
+            @if (_result != null)
+            {
+                <div class="lc-results">
+                    @if (_result.Type == "DML")
+                    {
+                        <div class="lc-dml">✓ @_result.RowsAffected @(_result.RowsAffected == 1 ? "row" : "rows") affected.</div>
+                    }
+                    else if (_result.Columns.Count == 0)
+                    {
+                        <div class="lc-dml">✓ Done.</div>
+                    }
+                    else
+                    {
+                        @if (_result.Truncated) { <div class="lc-trunc">⚠ Truncated to 200 rows.</div> }
+                        <div class="lc-table-wrap">
+                            <table class="results-table">
+                                <thead>
+                                    <tr>@foreach (var col in _result.Columns) { <th>@col.Name</th> }</tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var row in _result.Rows)
+                                    {
+                                        <tr>
+                                            @foreach (var col in _result.Columns)
+                                            {
+                                                <td>@(row.TryGetValue(col.Name, out var v) ? v?.ToString() ?? "NULL" : "")</td>
+                                            }
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="lc-rowcount">@_result.Rows.Count row(s)</div>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@if (_scene != null)
+{
+    <VizModal Scene="_scene" OnClose="() => _scene = null" />
+}
+
+@code {
+    [Parameter, EditorRequired] public string LessonId { get; set; } = "";
+    [Parameter, EditorRequired] public string DatabaseId { get; set; } = "";
+    [Parameter, EditorRequired] public PracticeProblem Problem { get; set; } = null!;
+    [Parameter, EditorRequired] public int Index { get; set; }
+    [Parameter] public EventCallback OnSolved { get; set; }
+
+    private StandaloneCodeEditor? _editor;
+    private readonly string _editorId = $"pp-{Guid.NewGuid():N}";
+    private PlainResult? _result;
+    private VizScene? _scene;
+    private bool _open, _busy, _solved, _showHint, _showSolution, _showSchema, _canVisualize;
+    private string? _error, _feedback;
+    private bool _feedbackOk;
+    private int _editorHeight = 100;
+
+    private bool Connected => ConnSvc.Status.Connected;
+
+    private static readonly MarkdownPipeline InlinePipeline =
+        new MarkdownPipelineBuilder().Build();
+
+    protected override void OnParametersSet()
+        => _solved = Progress.IsSolved(LessonId, Problem.Id);
+
+    // Renders one-line markdown (for `code` spans in prompts/hints) without <p> wrapper.
+    private static string RenderInline(string md)
+    {
+        var html = Markdown.ToHtml(md, InlinePipeline).Trim();
+        if (html.StartsWith("<p>") && html.EndsWith("</p>"))
+            html = html[3..^4];
+        return html;
+    }
+
+    private void Toggle() => _open = !_open;
+
+    private StandaloneEditorConstructionOptions EditorOptions(StandaloneCodeEditor _) =>
+        new()
+        {
+            Language = "sql",
+            Theme = "vs-dark",
+            Value = (Problem.Starter ?? "").Trim(),
+            Minimap = new EditorMinimapOptions { Enabled = false },
+            LineNumbers = "off",
+            FontFamily = "JetBrains Mono, Cascadia Code, Consolas, monospace",
+            FontSize = 13,
+            ScrollBeyondLastLine = false,
+            AutomaticLayout = true
+        };
+
+    private async Task OnKeyDown(KeyboardEvent e)
+    {
+        if (e.CtrlKey && e.Code == "Enter") await Run();
+    }
+
+    private async Task<string> CurrentSql()
+        => _editor != null ? (await _editor.GetValue() ?? "").Trim() : "";
+
+    private async Task Run()
+    {
+        var sql = await CurrentSql();
+        if (sql.Length == 0 || !Connected) return;
+        _busy = true; _error = null; _feedback = null; _result = null;
+        StateHasChanged();
+        try
+        {
+            _result = Executor.RunStatement(sql);
+            _canVisualize = QueryExecutorService.IsVisualizable(sql);
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task Visualize()
+    {
+        var sql = await CurrentSql();
+        if (sql.Length == 0 || !Connected) return;
+        _busy = true; _error = null;
+        StateHasChanged();
+        try
+        {
+            var viz = Executor.VisualizeQuery(sql);
+            _scene = SceneBuilder.Build(viz);
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task Check()
+    {
+        var sql = await CurrentSql();
+        if (!Connected) return;
+        if (sql.Length == 0) { _feedback = "Write a query first, then Check."; _feedbackOk = false; return; }
+        _busy = true; _error = null; _feedback = null; _result = null;
+        StateHasChanged();
+        try
+        {
+            bool ok = Problem.Type == "state" ? CheckState(sql) : CheckQuery(sql);
+            if (ok)
+            {
+                _feedback = "Correct! Nicely done.";
+                _feedbackOk = true;
+                if (!_solved)
+                {
+                    _solved = true;
+                    await Progress.MarkSolvedAsync(LessonId, Problem.Id);
+                    await OnSolved.InvokeAsync();
+                }
+            }
+            else
+            {
+                _feedbackOk = false;
+                _feedback ??= "Not quite — the result doesn't match the expected output. Compare with Run, or peek at the hint.";
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    // Query problems: compare the learner's result set against the solution's.
+    private bool CheckQuery(string sql)
+    {
+        var actual = Executor.RunStatement(sql);
+        _result = actual;
+        if (actual.Type != "SELECT")
+        {
+            _feedback = "This problem expects a SELECT query.";
+            return false;
+        }
+        var expected = Executor.RunStatement(Problem.Solution);
+        return Compare(actual, expected, HasOrderBy(Problem.Solution));
+    }
+
+    // State problems: re-seed → solution → verify (expected), re-seed → learner
+    // SQL → verify (actual). The learner's changes are left applied afterwards.
+    private bool CheckState(string sql)
+    {
+        if (Problem.Verify == null)
+            throw new InvalidOperationException("This problem has no verify query.");
+
+        SampleSvc.OpenSample(DatabaseId);
+        Executor.RunStatement(Problem.Solution);
+        var expected = Executor.RunStatement(Problem.Verify);
+
+        SampleSvc.OpenSample(DatabaseId);
+        try
+        {
+            var stmtResult = Executor.RunStatement(sql);
+            if (stmtResult.Type == "DML") _result = stmtResult;
+        }
+        catch
+        {
+            // Learner's SQL failed — put the database back to a clean state.
+            SampleSvc.OpenSample(DatabaseId);
+            throw;
+        }
+        var actual = Executor.RunStatement(Problem.Verify);
+        return Compare(actual, expected, ordered: true);
+    }
+
+    private static bool HasOrderBy(string sql) =>
+        Regex.IsMatch(sql, @"\bORDER\s+BY\b", RegexOptions.IgnoreCase);
+
+    // ── Result comparison ─────────────────────────────────────────────────────
+
+    private bool Compare(PlainResult actual, PlainResult expected, bool ordered)
+    {
+        if (actual.Columns.Count != expected.Columns.Count)
+        {
+            _feedback = $"Expected {expected.Columns.Count} column(s) but got {actual.Columns.Count}.";
+            return false;
+        }
+        if (actual.Rows.Count != expected.Rows.Count)
+        {
+            _feedback = $"Expected {expected.Rows.Count} row(s) but got {actual.Rows.Count}.";
+            return false;
+        }
+
+        var a = Serialize(actual);
+        var e = Serialize(expected);
+        if (!ordered) { a.Sort(StringComparer.Ordinal); e.Sort(StringComparer.Ordinal); }
+        return a.SequenceEqual(e, StringComparer.Ordinal);
+    }
+
+    private static List<string> Serialize(PlainResult r) =>
+        r.Rows.Select(row => string.Join("\u0001",
+            r.Columns.Select(c => Normalize(row.TryGetValue(c.Name, out var v) ? v : null)))).ToList();
+
+    // Normalizes values so 250 (INTEGER) and 250.0 (REAL) compare equal, and
+    // floating-point noise from equivalent expressions is ignored.
+    private static string Normalize(object? v) => v switch
+    {
+        null => "␀",
+        double d => d.ToString("G12", CultureInfo.InvariantCulture),
+        float f => ((double)f).ToString("G12", CultureInfo.InvariantCulture),
+        decimal m => ((double)m).ToString("G12", CultureInfo.InvariantCulture),
+        long l => ((double)l).ToString("G12", CultureInfo.InvariantCulture),
+        int i => ((double)i).ToString("G12", CultureInfo.InvariantCulture),
+        _ => v.ToString() ?? ""
+    };
+}

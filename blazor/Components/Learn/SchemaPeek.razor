@@ -1,0 +1,59 @@
+@* Compact inline schema reference for practice problems: every table with its
+   columns on one line. Re-reads the schema each time it is created, so it always
+   reflects the current database state. *@
+@inject SchemaService SchemaSvc
+@inject SqliteConnectionService ConnSvc
+
+<div class="schema-peek">
+    @if (!ConnSvc.Status.Connected)
+    {
+        <span class="sp-empty">Not connected.</span>
+    }
+    else if (_tables.Count == 0)
+    {
+        <span class="sp-empty">No tables yet — this database is empty.</span>
+    }
+    else
+    {
+        @foreach (var t in _tables)
+        {
+            <div class="sp-table">
+                <span class="sp-table-name">@t.Name</span>
+                <span class="sp-cols">
+                    @foreach (var col in _columns[t.Name])
+                    {
+                        <span class="sp-col" title="@ColTitle(col)">
+                            @if (col.IsPrimaryKey) { <span class="sp-key">🔑</span> }
+                            else if (col.IsForeignKey) { <span class="sp-key">🔗</span> }
+                            @col.Name<span class="sp-type">&nbsp;@col.DataType.ToUpperInvariant()</span>
+                        </span>
+                    }
+                </span>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private List<TableRef> _tables = new();
+    private readonly Dictionary<string, List<ColumnMeta>> _columns = new();
+
+    protected override void OnInitialized()
+    {
+        try
+        {
+            _tables = SchemaSvc.ListTables();
+            foreach (var t in _tables)
+                _columns[t.Name] = SchemaSvc.GetColumns(t.Name).Columns;
+        }
+        catch
+        {
+            _tables = new();
+        }
+    }
+
+    private static string ColTitle(ColumnMeta col) =>
+        col.IsPrimaryKey ? "Primary key"
+        : col.IsForeignKey ? "Foreign key"
+        : col.IsNullable ? "Nullable" : "NOT NULL";
+}

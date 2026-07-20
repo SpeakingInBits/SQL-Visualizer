@@ -1,0 +1,9 @@
+{
+  "id": "subqueries",
+  "title": "Subqueries",
+  "description": "Queries inside queries: scalar subqueries, IN and EXISTS, correlated subqueries, and derived tables.",
+  "database": "company",
+  "order": 4,
+  "kind": "lesson",
+  "exerciseCount": 30
+}

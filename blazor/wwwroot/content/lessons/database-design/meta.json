@@ -1,0 +1,9 @@
+{
+  "id": "database-design",
+  "title": "Database Design Fundamentals",
+  "description": "Entities, keys, relationships, and normalization: how to shape tables so your data stays consistent — with a graded knowledge check.",
+  "database": "",
+  "order": 7,
+  "kind": "quiz",
+  "exerciseCount": 30
+}

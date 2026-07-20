@@ -1,0 +1,9 @@
+{
+  "id": "summary-queries",
+  "title": "Summary Queries",
+  "description": "Aggregate functions, GROUP BY, and HAVING: turn thousands of rows into counts, totals, and averages.",
+  "database": "sales",
+  "order": 3,
+  "kind": "lesson",
+  "exerciseCount": 30
+}

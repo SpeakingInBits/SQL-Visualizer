@@ -15,6 +15,8 @@ builder.Services.AddSingleton<SqliteConnectionService>();
 // Scoped to match HttpClient (in WASM a scope lives for the whole app, so this is
 // effectively a singleton — but the DI validator rejects scoped-in-singleton).
 builder.Services.AddScoped<ContentService>();
+// Scoped because it depends on IJSRuntime (scoped in WASM); same effective lifetime.
+builder.Services.AddScoped<ProgressService>();
 builder.Services.AddSingleton<SampleDatabaseService>();
 builder.Services.AddSingleton<SchemaService>();
 builder.Services.AddSingleton<QueryExecutorService>();

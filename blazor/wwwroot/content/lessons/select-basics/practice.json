@@ -1,0 +1,184 @@
+{
+  "problems": [
+    {
+      "id": "sb01",
+      "prompt": "Select **all columns** for every movie.",
+      "hint": "`*` means all columns.",
+      "solution": "SELECT * FROM movies;"
+    },
+    {
+      "id": "sb02",
+      "prompt": "Show only the `title` of every movie.",
+      "hint": "List just the column you want after `SELECT`.",
+      "solution": "SELECT title FROM movies;"
+    },
+    {
+      "id": "sb03",
+      "prompt": "Show the `title` and `year` of every movie (in that column order).",
+      "hint": "Separate columns with a comma.",
+      "solution": "SELECT title, year FROM movies;"
+    },
+    {
+      "id": "sb04",
+      "prompt": "List each distinct `genre` exactly once.",
+      "hint": "`SELECT DISTINCT` removes duplicate rows.",
+      "solution": "SELECT DISTINCT genre FROM movies;"
+    },
+    {
+      "id": "sb05",
+      "prompt": "List each distinct `director` exactly once.",
+      "hint": "Same trick as the previous problem, different column.",
+      "solution": "SELECT DISTINCT director FROM movies;"
+    },
+    {
+      "id": "sb06",
+      "prompt": "Show `title` and `rating` for movies rated **9.0 or higher**.",
+      "hint": "Use `WHERE rating >= 9.0`.",
+      "solution": "SELECT title, rating FROM movies WHERE rating >= 9.0;"
+    },
+    {
+      "id": "sb07",
+      "prompt": "Show the `title` of every movie released in **1994**.",
+      "hint": "`WHERE year = 1994` — numbers don't need quotes.",
+      "solution": "SELECT title FROM movies WHERE year = 1994;"
+    },
+    {
+      "id": "sb08",
+      "prompt": "Show `title` and `year` for movies released **before 1980**.",
+      "hint": "Use the `<` operator.",
+      "solution": "SELECT title, year FROM movies WHERE year < 1980;"
+    },
+    {
+      "id": "sb09",
+      "prompt": "Show the `title` of every **Sci-Fi** movie.",
+      "hint": "Text needs single quotes: `'Sci-Fi'`.",
+      "solution": "SELECT title FROM movies WHERE genre = 'Sci-Fi';"
+    },
+    {
+      "id": "sb10",
+      "prompt": "Show `title` and `genre` for every movie that is **not** a Drama.",
+      "hint": "`<>` means not-equal.",
+      "solution": "SELECT title, genre FROM movies WHERE genre <> 'Drama';"
+    },
+    {
+      "id": "sb11",
+      "prompt": "Show `title` and `rating` for movies rated **between 8.5 and 9.0** (inclusive).",
+      "hint": "`BETWEEN 8.5 AND 9.0` includes both ends.",
+      "solution": "SELECT title, rating FROM movies WHERE rating BETWEEN 8.5 AND 9.0;"
+    },
+    {
+      "id": "sb12",
+      "prompt": "Show `title` and `year` for movies released in **1994, 1999, or 2010**.",
+      "hint": "`IN (1994, 1999, 2010)` beats three ORs.",
+      "solution": "SELECT title, year FROM movies WHERE year IN (1994, 1999, 2010);"
+    },
+    {
+      "id": "sb13",
+      "prompt": "Show the `title` of movies whose title **starts with** `The `.",
+      "hint": "`LIKE 'The %'` — the `%` matches anything after.",
+      "solution": "SELECT title FROM movies WHERE title LIKE 'The %';"
+    },
+    {
+      "id": "sb14",
+      "prompt": "Show `title` and `director` for movies directed by anyone whose name **starts with** `Christopher`.",
+      "hint": "Pattern: `'Christopher%'`.",
+      "solution": "SELECT title, director FROM movies WHERE director LIKE 'Christopher%';"
+    },
+    {
+      "id": "sb15",
+      "prompt": "Show the `title` of movies whose title **contains** the word `the` (any position, any case).",
+      "hint": "Put `%` on both sides of the pattern.",
+      "solution": "SELECT title FROM movies WHERE title LIKE '%the%';"
+    },
+    {
+      "id": "sb16",
+      "prompt": "Show the `title` of movies whose `gross_millions` is **unknown** (NULL).",
+      "hint": "`= NULL` never matches — use `IS NULL`.",
+      "solution": "SELECT title FROM movies WHERE gross_millions IS NULL;"
+    },
+    {
+      "id": "sb17",
+      "prompt": "Show `title` and `gross_millions` for movies where the gross **is recorded** (not NULL).",
+      "hint": "The opposite of `IS NULL` is `IS NOT NULL`.",
+      "solution": "SELECT title, gross_millions FROM movies WHERE gross_millions IS NOT NULL;"
+    },
+    {
+      "id": "sb18",
+      "prompt": "Show `title` and `genre` for movies that are **Action or Adventure**.",
+      "hint": "Either `genre = 'Action' OR genre = 'Adventure'`, or an `IN` list.",
+      "solution": "SELECT title, genre FROM movies WHERE genre IN ('Action', 'Adventure');"
+    },
+    {
+      "id": "sb19",
+      "prompt": "Show the `title` of **Dramas released in 1994**.",
+      "hint": "Two conditions joined with `AND`.",
+      "solution": "SELECT title FROM movies WHERE genre = 'Drama' AND year = 1994;"
+    },
+    {
+      "id": "sb20",
+      "prompt": "Show `title` and `rating` for **Sci-Fi movies rated above 8.5**.",
+      "hint": "Combine a genre check and a rating check with `AND`.",
+      "solution": "SELECT title, rating FROM movies WHERE genre = 'Sci-Fi' AND rating > 8.5;"
+    },
+    {
+      "id": "sb21",
+      "prompt": "Show `title` and `runtime_min` for movies shorter than **2 hours** (under 120 minutes).",
+      "hint": "120 minutes = 2 hours.",
+      "solution": "SELECT title, runtime_min FROM movies WHERE runtime_min < 120;"
+    },
+    {
+      "id": "sb22",
+      "prompt": "Show `title` and `year` of all movies, **oldest first**, breaking year ties alphabetically by title.",
+      "hint": "`ORDER BY year, title` — ascending is the default.",
+      "solution": "SELECT title, year FROM movies ORDER BY year, title;"
+    },
+    {
+      "id": "sb23",
+      "prompt": "Show `title` and `rating` of all movies, **highest rating first**, breaking ties alphabetically by title.",
+      "hint": "`DESC` after a sort key reverses it: `ORDER BY rating DESC, title`.",
+      "solution": "SELECT title, rating FROM movies ORDER BY rating DESC, title;"
+    },
+    {
+      "id": "sb24",
+      "prompt": "Show `title`, `genre`, and `rating` sorted by `genre` (A→Z), then by `rating` (highest first), then by `title` (A→Z).",
+      "hint": "Three sort keys, comma-separated; only rating is `DESC`.",
+      "solution": "SELECT title, genre, rating FROM movies ORDER BY genre, rating DESC, title;"
+    },
+    {
+      "id": "sb25",
+      "prompt": "Show `title` and `year` of the **5 most recent** movies.",
+      "hint": "Sort by year descending, then `LIMIT 5`.",
+      "solution": "SELECT title, year FROM movies ORDER BY year DESC LIMIT 5;"
+    },
+    {
+      "id": "sb26",
+      "prompt": "Show `title` and `rating` of the **top 3 highest-rated** movies.",
+      "hint": "`ORDER BY rating DESC LIMIT 3`.",
+      "solution": "SELECT title, rating FROM movies ORDER BY rating DESC LIMIT 3;"
+    },
+    {
+      "id": "sb27",
+      "prompt": "Show the `title` and `runtime_min` of the **single longest** movie.",
+      "hint": "Sort by runtime descending and keep 1 row.",
+      "solution": "SELECT title, runtime_min FROM movies ORDER BY runtime_min DESC LIMIT 1;"
+    },
+    {
+      "id": "sb28",
+      "prompt": "Show each movie's `title` and its gross **in dollars** (not millions), for movies where the gross is known. Name the computed column `gross_dollars`.",
+      "hint": "Multiply: `gross_millions * 1000000 AS gross_dollars`, and filter out NULLs.",
+      "solution": "SELECT title, gross_millions * 1000000 AS gross_dollars FROM movies WHERE gross_millions IS NOT NULL;"
+    },
+    {
+      "id": "sb29",
+      "prompt": "Show each `title` with its runtime **in hours, rounded to 1 decimal**, as a column named `hours`.",
+      "hint": "`ROUND(runtime_min / 60.0, 1)` — dividing by `60.0` (not `60`) keeps the decimals.",
+      "solution": "SELECT title, ROUND(runtime_min / 60.0, 1) AS hours FROM movies;"
+    },
+    {
+      "id": "sb30",
+      "prompt": "The finale: show `title`, `genre`, and `rating` of **Sci-Fi and Action** movies rated **8.5 or higher**, sorted by rating (highest first) and then title (A→Z).",
+      "hint": "`IN` + `AND` + a two-key `ORDER BY`.",
+      "solution": "SELECT title, genre, rating FROM movies WHERE genre IN ('Sci-Fi', 'Action') AND rating >= 8.5 ORDER BY rating DESC, title;"
+    }
+  ]
+}

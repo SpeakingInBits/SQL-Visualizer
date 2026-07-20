@@ -35,4 +35,24 @@ public class ContentService
         var body = await _http.GetStringAsync($"content/lessons/{id}/content.md");
         return new Lesson(meta, body);
     }
+
+    /// <summary>Loads a lesson's practice set, or null if it has none.</summary>
+    public Task<PracticeSet?> LoadPracticeAsync(string id) =>
+        LoadOptionalAsync<PracticeSet>($"content/lessons/{id}/practice.json");
+
+    /// <summary>Loads a lesson's quiz, or null if it has none.</summary>
+    public Task<Quiz?> LoadQuizAsync(string id) =>
+        LoadOptionalAsync<Quiz>($"content/lessons/{id}/quiz.json");
+
+    // A missing optional file surfaces as a 404 (or, on some static hosts, as the
+    // SPA index.html fallback) — treat both as "not present".
+    private async Task<T?> LoadOptionalAsync<T>(string url) where T : class
+    {
+        var resp = await _http.GetAsync(url);
+        if (!resp.IsSuccessStatusCode) return null;
+        var mediaType = resp.Content.Headers.ContentType?.MediaType ?? "";
+        if (mediaType.Contains("html")) return null;
+        try { return await resp.Content.ReadFromJsonAsync<T>(JsonOpts); }
+        catch (JsonException) { return null; }
+    }
 }
