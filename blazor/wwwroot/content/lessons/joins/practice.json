@@ -1,0 +1,184 @@
+{
+  "problems": [
+    {
+      "id": "jn01",
+      "prompt": "Join `students` and `enrollments`: show each student's `name` next to the letter `grade` of each of their enrollments.",
+      "hint": "`JOIN enrollments e ON e.student_id = s.id`, then select `s.name, e.grade`.",
+      "solution": "SELECT s.name, e.grade FROM students s JOIN enrollments e ON e.student_id = s.id;"
+    },
+    {
+      "id": "jn02",
+      "prompt": "Chain all three tables: show each enrollment as student `name` + course `title`.",
+      "hint": "students → enrollments → courses, with two `JOIN … ON` clauses.",
+      "solution": "SELECT s.name, c.title FROM students s JOIN enrollments e ON e.student_id = s.id JOIN courses c ON c.id = e.course_id;"
+    },
+    {
+      "id": "jn03",
+      "prompt": "Show student `name`, course `title`, and letter `grade` for every enrollment where the grade is an **A**.",
+      "hint": "Same 3-table join as before, plus `WHERE e.grade = 'A'`.",
+      "solution": "SELECT s.name, c.title, e.grade FROM students s JOIN enrollments e ON e.student_id = s.id JOIN courses c ON c.id = e.course_id WHERE e.grade = 'A';"
+    },
+    {
+      "id": "jn04",
+      "prompt": "List the names of all students enrolled in **Biology**.",
+      "hint": "Join through to `courses` and filter `WHERE c.title = 'Biology'`.",
+      "solution": "SELECT s.name FROM students s JOIN enrollments e ON e.student_id = s.id JOIN courses c ON c.id = e.course_id WHERE c.title = 'Biology';"
+    },
+    {
+      "id": "jn05",
+      "prompt": "Show `name` and course `title` for every enrollment belonging to a **Science major**.",
+      "hint": "The filter goes on `s.major`, not on the course.",
+      "solution": "SELECT s.name, c.title FROM students s JOIN enrollments e ON e.student_id = s.id JOIN courses c ON c.id = e.course_id WHERE s.major = 'Science';"
+    },
+    {
+      "id": "jn06",
+      "prompt": "Show `name`, `title`, and `grade` for enrollments in **4-credit** courses.",
+      "hint": "Filter on `c.credits = 4`.",
+      "solution": "SELECT s.name, c.title, e.grade FROM students s JOIN enrollments e ON e.student_id = s.id JOIN courses c ON c.id = e.course_id WHERE c.credits = 4;"
+    },
+    {
+      "id": "jn07",
+      "prompt": "List the names of students who took **Algebra**, along with their letter grade in it.",
+      "hint": "Filter `WHERE c.title = 'Algebra'`.",
+      "solution": "SELECT s.name, e.grade FROM students s JOIN enrollments e ON e.student_id = s.id JOIN courses c ON c.id = e.course_id WHERE c.title = 'Algebra';"
+    },
+    {
+      "id": "jn08",
+      "prompt": "Show all **grade-11** students' enrollments: `name`, course `title`, letter `grade`.",
+      "hint": "`WHERE s.grade = 11` — careful: `students.grade` is the year level, `enrollments.grade` is the letter.",
+      "solution": "SELECT s.name, c.title, e.grade FROM students s JOIN enrollments e ON e.student_id = s.id JOIN courses c ON c.id = e.course_id WHERE s.grade = 11;"
+    },
+    {
+      "id": "jn09",
+      "prompt": "Which course titles has **Grace** taken?",
+      "hint": "Join and filter on `s.name = 'Grace'`.",
+      "solution": "SELECT c.title FROM students s JOIN enrollments e ON e.student_id = s.id JOIN courses c ON c.id = e.course_id WHERE s.name = 'Grace';"
+    },
+    {
+      "id": "jn10",
+      "prompt": "List the names of students (other than Bob) who took **Biology** — Bob's classmates.",
+      "hint": "Add `AND s.name <> 'Bob'` to the Biology query.",
+      "solution": "SELECT s.name FROM students s JOIN enrollments e ON e.student_id = s.id JOIN courses c ON c.id = e.course_id WHERE c.title = 'Biology' AND s.name <> 'Bob';"
+    },
+    {
+      "id": "jn11",
+      "prompt": "LEFT JOIN: show **every** student's `name` with the `course_id` of each enrollment — students with no enrollments must still appear (with NULL).",
+      "hint": "`LEFT JOIN enrollments` keeps all students. Ivy should show up.",
+      "solution": "SELECT s.name, e.course_id FROM students s LEFT JOIN enrollments e ON e.student_id = s.id;"
+    },
+    {
+      "id": "jn12",
+      "prompt": "Find the `name` of every student with **no enrollments at all**.",
+      "hint": "LEFT JOIN, then keep rows `WHERE e.id IS NULL`.",
+      "solution": "SELECT s.name FROM students s LEFT JOIN enrollments e ON e.student_id = s.id WHERE e.id IS NULL;"
+    },
+    {
+      "id": "jn13",
+      "prompt": "Find the `title` of every course that **nobody is enrolled in**.",
+      "hint": "Same NULL trick, but courses is the left table.",
+      "solution": "SELECT c.title FROM courses c LEFT JOIN enrollments e ON e.course_id = c.id WHERE e.id IS NULL;"
+    },
+    {
+      "id": "jn14",
+      "prompt": "Show every course `title` with the `name` of each enrolled student — courses with no students must still appear.",
+      "hint": "Start from `courses`, LEFT JOIN `enrollments`, then LEFT JOIN `students`.",
+      "solution": "SELECT c.title, s.name FROM courses c LEFT JOIN enrollments e ON e.course_id = c.id LEFT JOIN students s ON s.id = e.student_id;"
+    },
+    {
+      "id": "jn15",
+      "prompt": "Show every student's `name` with each course `title` they take — including students taking nothing.",
+      "hint": "students LEFT JOIN enrollments LEFT JOIN courses.",
+      "solution": "SELECT s.name, c.title FROM students s LEFT JOIN enrollments e ON e.student_id = s.id LEFT JOIN courses c ON c.id = e.course_id;"
+    },
+    {
+      "id": "jn16",
+      "prompt": "Self-join: show each student's `name` (as `student`) with their mentor's name (as `mentor`) — only students **who have** a mentor.",
+      "hint": "Join `students s` to `students m ON s.mentor_id = m.id`, and alias both output columns.",
+      "solution": "SELECT s.name AS student, m.name AS mentor FROM students s JOIN students m ON s.mentor_id = m.id;"
+    },
+    {
+      "id": "jn17",
+      "prompt": "Same as the previous problem, but include students **without** a mentor (mentor shows as NULL). Columns: `student`, `mentor`.",
+      "hint": "Switch the self-join to a `LEFT JOIN`.",
+      "solution": "SELECT s.name AS student, m.name AS mentor FROM students s LEFT JOIN students m ON s.mentor_id = m.id;"
+    },
+    {
+      "id": "jn18",
+      "prompt": "Show `student` and `mentor` names for every student whose mentor has a **different major** than they do.",
+      "hint": "Add `WHERE s.major <> m.major` to the mentor join.",
+      "solution": "SELECT s.name AS student, m.name AS mentor FROM students s JOIN students m ON s.mentor_id = m.id WHERE s.major <> m.major;"
+    },
+    {
+      "id": "jn19",
+      "prompt": "Self-join: list every pair of students who share the same `major`, as columns `student1` and `student2`. List each pair once (use `<` on names to avoid duplicates and self-pairs).",
+      "hint": "`JOIN students b ON a.major = b.major AND a.name < b.name` — and alias both columns.",
+      "solution": "SELECT a.name AS student1, b.name AS student2 FROM students a JOIN students b ON a.major = b.major AND a.name < b.name;"
+    },
+    {
+      "id": "jn20",
+      "prompt": "Show each mentored student's `name`, their `major`, their mentor's name (as `mentor`), and the mentor's `grade` (as `mentor_grade`).",
+      "hint": "One self-join, four selected columns — alias the mentor columns.",
+      "solution": "SELECT s.name, s.major, m.name AS mentor, m.grade AS mentor_grade FROM students s JOIN students m ON s.mentor_id = m.id;"
+    },
+    {
+      "id": "jn21",
+      "prompt": "CROSS JOIN: pair every **grade-10** student with every course — show `name` and `title` for all combinations.",
+      "hint": "`CROSS JOIN` has no ON; filter students with `WHERE s.grade = 10`.",
+      "solution": "SELECT s.name, c.title FROM students s CROSS JOIN courses c WHERE s.grade = 10;"
+    },
+    {
+      "id": "jn22",
+      "prompt": "FULL OUTER JOIN `students` and `alumni` on matching `name`: show `student_name` and `alumni_name`, keeping unmatched people from **both** sides.",
+      "hint": "`FULL OUTER JOIN alumni a ON s.name = a.name`, aliasing each name column.",
+      "solution": "SELECT s.name AS student_name, a.name AS alumni_name FROM students s FULL OUTER JOIN alumni a ON s.name = a.name;"
+    },
+    {
+      "id": "jn23",
+      "prompt": "UNION: one de-duplicated list of every person's `name` — current students and alumni together.",
+      "hint": "Two SELECTs stacked with `UNION`.",
+      "solution": "SELECT name FROM students UNION SELECT name FROM alumni;"
+    },
+    {
+      "id": "jn24",
+      "prompt": "Same list but with `UNION ALL` — keep duplicates. (Compare the row count with the previous problem!)",
+      "hint": "Grace appears twice this time.",
+      "solution": "SELECT name FROM students UNION ALL SELECT name FROM alumni;"
+    },
+    {
+      "id": "jn25",
+      "prompt": "One list of the names of all **Math majors**, past and present (students and alumni).",
+      "hint": "Filter each side with `WHERE major = 'Math'` before the `UNION`.",
+      "solution": "SELECT name FROM students WHERE major = 'Math' UNION SELECT name FROM alumni WHERE major = 'Math';"
+    },
+    {
+      "id": "jn26",
+      "prompt": "INTERSECT: which `name` appears in **both** `students` and `alumni`?",
+      "hint": "`INTERSECT` keeps only rows present in both results.",
+      "solution": "SELECT name FROM students INTERSECT SELECT name FROM alumni;"
+    },
+    {
+      "id": "jn27",
+      "prompt": "EXCEPT: which student names do **not** appear in the alumni table?",
+      "hint": "`students EXCEPT alumni` — order matters with EXCEPT.",
+      "solution": "SELECT name FROM students EXCEPT SELECT name FROM alumni;"
+    },
+    {
+      "id": "jn28",
+      "prompt": "Flip it: which **alumni** names do not appear among current students?",
+      "hint": "Same as before with the two SELECTs swapped.",
+      "solution": "SELECT name FROM alumni EXCEPT SELECT name FROM students;"
+    },
+    {
+      "id": "jn29",
+      "prompt": "Build a contact list: every person's `name` plus a `role` column that says `student` or `alumni`, sorted by name. Use UNION ALL.",
+      "hint": "Add a literal text column to each SELECT: `'student' AS role`. Put `ORDER BY name` after the second query.",
+      "solution": "SELECT name, 'student' AS role FROM students UNION ALL SELECT name, 'alumni' AS role FROM alumni ORDER BY name;"
+    },
+    {
+      "id": "jn30",
+      "prompt": "The finale: names of students who earned an **A in a 4-credit course**, UNION'd with alumni who majored in **Science** — one combined, de-duplicated, alphabetical list.",
+      "hint": "First half is a 3-table join with two conditions; second half filters alumni. `ORDER BY name` goes last.",
+      "solution": "SELECT s.name FROM students s JOIN enrollments e ON e.student_id = s.id JOIN courses c ON c.id = e.course_id WHERE e.grade = 'A' AND c.credits = 4 UNION SELECT name FROM alumni WHERE major = 'Science' ORDER BY name;"
+    }
+  ]
+}

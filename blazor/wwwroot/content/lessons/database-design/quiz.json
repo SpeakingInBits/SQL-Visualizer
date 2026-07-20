@@ -1,0 +1,350 @@
+{
+  "passThreshold": 0.7,
+  "questions": [
+    {
+      "id": "dq01",
+      "question": "In a relational database, an *entity* (like \"customer\" or \"order\") is usually represented as…",
+      "choices": ["a column", "a table", "a row", "an index"],
+      "answer": 1,
+      "explanation": "Each entity type becomes a table; each individual occurrence is a row, and each fact about it is a column."
+    },
+    {
+      "id": "dq02",
+      "question": "What is a primary key?",
+      "choices": [
+        "The first column of a table",
+        "A column that is indexed for fast lookup",
+        "A column (or set of columns) that uniquely identifies each row",
+        "The column used most often in WHERE clauses"
+      ],
+      "answer": 2,
+      "explanation": "A primary key uniquely identifies each row — it must be unique, non-NULL, and stable. Indexing comes along for free, but it's not the definition."
+    },
+    {
+      "id": "dq03",
+      "question": "Which of these makes the best primary key for a `customers` table?",
+      "choices": [
+        "The customer's email address",
+        "The customer's full name",
+        "An auto-numbered `id` column",
+        "Name + birth date combined"
+      ],
+      "answer": 2,
+      "explanation": "A surrogate key (auto-numbered id) never changes and is never reused. Emails change, names collide — real-world values make risky keys."
+    },
+    {
+      "id": "dq04",
+      "question": "A key made from a real-world value like an ISBN or email is called a…",
+      "choices": ["surrogate key", "natural key", "foreign key", "composite key"],
+      "answer": 1,
+      "explanation": "Natural keys come from the data itself; surrogate keys are made-up numbers. Natural keys look attractive but are fragile because reality changes."
+    },
+    {
+      "id": "dq05",
+      "question": "What is a foreign key?",
+      "choices": [
+        "A key imported from another database",
+        "A column that must contain unique values",
+        "A backup copy of the primary key",
+        "A column whose values must match a key in another table"
+      ],
+      "answer": 3,
+      "explanation": "A foreign key points at another table's primary key — like `orders.customer_id` referencing `customers.id` — and the database enforces that the target row exists."
+    },
+    {
+      "id": "dq06",
+      "question": "A customer can place many orders, and every order belongs to exactly one customer. This relationship is…",
+      "choices": ["one-to-one", "one-to-many", "many-to-many", "recursive"],
+      "answer": 1,
+      "explanation": "Classic one-to-many: one customer, many orders. It's implemented with a foreign key on the many side (`orders.customer_id`)."
+    },
+    {
+      "id": "dq07",
+      "question": "In a one-to-many relationship, which table holds the foreign key?",
+      "choices": [
+        "The \"one\" side",
+        "The \"many\" side",
+        "Both tables",
+        "Neither — it goes in a third table"
+      ],
+      "answer": 1,
+      "explanation": "The many side points back at its parent: each order row carries the id of its one customer. Putting order ids on the customer row would need a list in a cell."
+    },
+    {
+      "id": "dq08",
+      "question": "Students take many courses and courses have many students. How do you model this?",
+      "choices": [
+        "A `course_ids` text column on students",
+        "A foreign key on `students` pointing at `courses`",
+        "A junction table with a foreign key to each side",
+        "Duplicate student rows, one per course"
+      ],
+      "answer": 2,
+      "explanation": "Many-to-many always needs a third table (like `enrollments`) with one row per student-course pair — no single foreign key can express it."
+    },
+    {
+      "id": "dq09",
+      "question": "What's the ideal primary key for that `enrollments` junction table?",
+      "choices": [
+        "The student_id alone",
+        "The course_id alone",
+        "A composite key over (student_id, course_id)",
+        "Junction tables don't need keys"
+      ],
+      "answer": 2,
+      "explanation": "The pair is what's unique — one row per student-per-course. (An auto-id plus a UNIQUE constraint on the pair also works.)"
+    },
+    {
+      "id": "dq10",
+      "question": "A `phones` column containing `'555-1234, 555-9876'` violates which principle?",
+      "choices": [
+        "Second normal form",
+        "First normal form — one value per cell",
+        "Third normal form",
+        "Referential integrity"
+      ],
+      "answer": 1,
+      "explanation": "1NF says every cell holds a single atomic value. Multiple phone numbers belong in a separate `phone_numbers` table, one row each."
+    },
+    {
+      "id": "dq11",
+      "question": "Columns named `item1`, `item2`, `item3` on an `orders` table are a symptom of…",
+      "choices": [
+        "good denormalization",
+        "a repeating group — a 1NF violation",
+        "a composite key",
+        "a missing index"
+      ],
+      "answer": 1,
+      "explanation": "Repeating groups cap how many items fit and make queries miserable ('search all three columns'). The fix is an `order_items` table with one row per item."
+    },
+    {
+      "id": "dq12",
+      "question": "The main danger of storing a customer's address on every one of their order rows is…",
+      "choices": [
+        "the table gets too many columns",
+        "an update anomaly — changing it in one place but not others leaves contradictions",
+        "queries become impossible to write",
+        "foreign keys stop working"
+      ],
+      "answer": 1,
+      "explanation": "Duplicated facts drift apart when updated. Store the address once on `customers` and reference it — that's the entire point of normalization."
+    },
+    {
+      "id": "dq13",
+      "question": "An `order_items` table has key `(order_id, product_id)` and also stores `product_name`. Which normal form does that break?",
+      "choices": [
+        "1NF",
+        "2NF — the name depends on only part of the key",
+        "3NF",
+        "None — that's fine"
+      ],
+      "answer": 1,
+      "explanation": "`product_name` is determined by `product_id` alone — half the composite key. 2NF says move it to the `products` table."
+    },
+    {
+      "id": "dq14",
+      "question": "An `employees` table stores `dept_id` and also `dept_name`. Which normal form does that break?",
+      "choices": [
+        "1NF",
+        "2NF",
+        "3NF — a non-key column depends on another non-key column",
+        "None — that's required"
+      ],
+      "answer": 2,
+      "explanation": "`dept_name` depends on `dept_id`, not on the employee. 3NF says department facts live in a `departments` table, referenced by id."
+    },
+    {
+      "id": "dq15",
+      "question": "\"Every non-key column must depend on the key, the whole key, and nothing but the key\" summarizes…",
+      "choices": [
+        "referential integrity",
+        "normalization through 3NF",
+        "index design",
+        "ACID transactions"
+      ],
+      "answer": 1,
+      "explanation": "The three clauses map to 1NF/2NF/3NF: depends on the key (there is one), the whole key (2NF), nothing but the key (3NF)."
+    },
+    {
+      "id": "dq16",
+      "question": "What is denormalization?",
+      "choices": [
+        "Fixing a database that was never normalized",
+        "Deliberately duplicating data to speed up reads, after a clean design",
+        "Removing primary keys for flexibility",
+        "Splitting a table into more tables"
+      ],
+      "answer": 1,
+      "explanation": "Denormalization trades consistency-safety for read performance. It's a measured optimization on top of a normalized design — not an excuse to skip design."
+    },
+    {
+      "id": "dq17",
+      "question": "An `order_items` table stores `unit_price` even though `products` has a `price`. This is…",
+      "choices": [
+        "a 3NF violation to fix",
+        "correct — the price at time of sale is a different fact from the current price",
+        "a performance optimization only",
+        "a 2NF violation"
+      ],
+      "answer": 1,
+      "explanation": "Historical price and current price are different facts. If products.price changes next week, old orders must still show what was actually paid."
+    },
+    {
+      "id": "dq18",
+      "question": "Referential integrity means…",
+      "choices": [
+        "every table has a primary key",
+        "every foreign key value points at an existing row in the referenced table",
+        "all columns are NOT NULL",
+        "queries always return consistent results"
+      ],
+      "answer": 1,
+      "explanation": "No orphans: an `orders.customer_id` of 42 is only valid while customer 42 exists. Declared foreign keys let the database enforce this."
+    },
+    {
+      "id": "dq19",
+      "question": "If deleting a customer should be blocked while they still have orders, you'd rely on…",
+      "choices": [
+        "a UNIQUE constraint",
+        "the foreign key constraint rejecting the delete",
+        "a CHECK constraint",
+        "an index on customer_id"
+      ],
+      "answer": 1,
+      "explanation": "That's foreign key enforcement at work (the default RESTRICT behavior). Alternatives like ON DELETE CASCADE instead delete the orders too — a deliberate design choice."
+    },
+    {
+      "id": "dq20",
+      "question": "When is a NULL appropriate in a well-designed column?",
+      "choices": [
+        "Never — NULLs are always design errors",
+        "When the value is genuinely unknown or not applicable for some rows",
+        "Whenever you're not sure what type to use",
+        "Only in primary key columns"
+      ],
+      "answer": 1,
+      "explanation": "NULL legitimately means 'unknown/absent' — like `return_date` on an open loan. But default to NOT NULL, and never allow NULL in a key."
+    },
+    {
+      "id": "dq21",
+      "question": "Which is the best type strategy for storing money amounts in a serious system?",
+      "choices": [
+        "Floating-point REAL, since prices have decimals",
+        "TEXT, so you can include the currency symbol",
+        "An exact type — integer cents or DECIMAL — to avoid rounding drift",
+        "Whatever the ORM picks"
+      ],
+      "answer": 2,
+      "explanation": "Binary floating point can't represent 0.10 exactly; tiny errors accumulate across sums. Exact types (integer cents, DECIMAL/NUMERIC) are the standard answer."
+    },
+    {
+      "id": "dq22",
+      "question": "A one-to-one relationship between two tables most often suggests…",
+      "choices": [
+        "the two tables could simply be one, unless splitting off optional or sensitive data",
+        "a missing junction table",
+        "a many-to-many in disguise",
+        "an error in the foreign keys"
+      ],
+      "answer": 0,
+      "explanation": "True 1:1 splits are for optional detail blocks, huge rarely-used columns, or restricted-access data. Otherwise, merge them."
+    },
+    {
+      "id": "dq23",
+      "question": "An employee table where each employee's `manager_id` points at another employee is an example of…",
+      "choices": [
+        "a many-to-many relationship",
+        "a self-referencing (recursive) relationship",
+        "denormalization",
+        "a composite key"
+      ],
+      "answer": 1,
+      "explanation": "The foreign key targets the same table it lives in — queried with a self-join, as you did in the joins unit."
+    },
+    {
+      "id": "dq24",
+      "question": "Which columns should you index *first* in a typical schema?",
+      "choices": [
+        "Every column, to be safe",
+        "Foreign keys and columns you constantly filter or join on",
+        "Long text columns",
+        "Columns that are mostly NULL"
+      ],
+      "answer": 1,
+      "explanation": "FKs get joined constantly and aren't auto-indexed in most databases. Indexing everything backfires — each index slows every write."
+    },
+    {
+      "id": "dq25",
+      "question": "What's the cost of adding an index?",
+      "choices": [
+        "Reads get slower",
+        "Writes get slower and storage grows",
+        "The table must be recreated on every insert",
+        "Nothing — indexes are free"
+      ],
+      "answer": 1,
+      "explanation": "Every INSERT/UPDATE/DELETE must also maintain each index. Indexes are a read-vs-write trade, which is why you add them deliberately."
+    },
+    {
+      "id": "dq26",
+      "question": "A `courses` table stores `teacher_name` and `teacher_office`. Teachers teach many courses. What's the 3NF fix?",
+      "choices": [
+        "Add a UNIQUE constraint on teacher_name",
+        "Create a `teachers` table and reference it with `teacher_id`",
+        "Split courses into one table per teacher",
+        "Store the office only on one of each teacher's courses"
+      ],
+      "answer": 1,
+      "explanation": "Office depends on the teacher, not the course. Extract the teacher entity; courses then carry just a `teacher_id` foreign key."
+    },
+    {
+      "id": "dq27",
+      "question": "Which design correctly models \"a book can have several authors, an author writes several books\"?",
+      "choices": [
+        "`books.author_id` referencing authors",
+        "`authors.book_id` referencing books",
+        "`books`, `authors`, and a `book_authors` junction table",
+        "An `authors` text column on books"
+      ],
+      "answer": 2,
+      "explanation": "Many-to-many again — only a junction table with a row per (book, author) pair captures it without duplication or lists-in-cells."
+    },
+    {
+      "id": "dq28",
+      "question": "Your report query needs 6 joins and feels slow, so a teammate suggests merging everything into one wide table. The standard advice is…",
+      "choices": [
+        "Do it — fewer joins is always better design",
+        "Keep the normalized design; consider indexes, views, or targeted denormalization only after measuring",
+        "Delete the foreign keys to speed up joins",
+        "Rewrite the report without SQL"
+      ],
+      "answer": 1,
+      "explanation": "Joins are what relational databases are built to do fast. Measure first; if needed, add indexes or a reporting view — wholesale denormalization reintroduces every update anomaly."
+    },
+    {
+      "id": "dq29",
+      "question": "Which naming practice makes a schema easiest to work with?",
+      "choices": [
+        "Consistent snake_case with foreign keys named `<entity>_id`",
+        "Abbreviating every name to 4 characters",
+        "Naming tables after the app screens that use them",
+        "Mixing singular and plural table names for variety"
+      ],
+      "answer": 0,
+      "explanation": "Boring consistency wins: `customer_id` in any table obviously points at `customers.id`, and nobody has to memorize exceptions."
+    },
+    {
+      "id": "dq30",
+      "question": "You're designing a system for gyms: members join classes, each class has one instructor, instructors teach many classes. Which table set is right?",
+      "choices": [
+        "members, classes, instructors — with `classes.instructor_id` and a `class_members` junction table",
+        "members, classes — with `members.class_id`",
+        "one big `gym` table",
+        "members, classes, instructors — with `instructors.class_id`"
+      ],
+      "answer": 0,
+      "explanation": "Instructor→classes is one-to-many (FK on classes); members↔classes is many-to-many (junction table). Three entities, four tables total."
+    }
+  ]
+}

@@ -1,0 +1,184 @@
+{
+  "problems": [
+    {
+      "id": "su01",
+      "prompt": "Show `name` and `salary` of employees earning **more than the company-wide average** salary.",
+      "hint": "Compare against `(SELECT AVG(salary) FROM employees)`.",
+      "solution": "SELECT name, salary FROM employees WHERE salary > (SELECT AVG(salary) FROM employees);"
+    },
+    {
+      "id": "su02",
+      "prompt": "Show `name` and `salary` of employees earning **below** the company-wide average.",
+      "hint": "Flip the comparison from the previous problem.",
+      "solution": "SELECT name, salary FROM employees WHERE salary < (SELECT AVG(salary) FROM employees);"
+    },
+    {
+      "id": "su03",
+      "prompt": "Who earns the **highest salary**? Show `name` and `salary` — use a subquery, not LIMIT (it should still work if two people tie).",
+      "hint": "`WHERE salary = (SELECT MAX(salary) FROM employees)`.",
+      "solution": "SELECT name, salary FROM employees WHERE salary = (SELECT MAX(salary) FROM employees);"
+    },
+    {
+      "id": "su04",
+      "prompt": "Who earns the **lowest salary**? Show `name` and `salary` via a subquery.",
+      "hint": "Same pattern with `MIN`.",
+      "solution": "SELECT name, salary FROM employees WHERE salary = (SELECT MIN(salary) FROM employees);"
+    },
+    {
+      "id": "su05",
+      "prompt": "Using `IN` with a subquery, list the names of employees who work in a department located in **Building A**.",
+      "hint": "The subquery selects `id` from `departments WHERE location = 'Building A'`.",
+      "solution": "SELECT name FROM employees WHERE dept_id IN (SELECT id FROM departments WHERE location = 'Building A');"
+    },
+    {
+      "id": "su06",
+      "prompt": "List names of employees working in **Building B** departments.",
+      "hint": "Same shape, different building.",
+      "solution": "SELECT name FROM employees WHERE dept_id IN (SELECT id FROM departments WHERE location = 'Building B');"
+    },
+    {
+      "id": "su07",
+      "prompt": "Which department has **no employees**? Show its `name` (use `NOT IN` or `NOT EXISTS`).",
+      "hint": "Department ids that never appear in `employees.dept_id`.",
+      "solution": "SELECT name FROM departments WHERE id NOT IN (SELECT dept_id FROM employees WHERE dept_id IS NOT NULL);"
+    },
+    {
+      "id": "su08",
+      "prompt": "List the names of employees who are **not assigned to any project**.",
+      "hint": "Their `id` never appears in `assignments.employee_id`.",
+      "solution": "SELECT name FROM employees WHERE id NOT IN (SELECT employee_id FROM assignments);"
+    },
+    {
+      "id": "su09",
+      "prompt": "List the names of employees assigned to the **Apollo** project.",
+      "hint": "Nest twice: assignments for the project whose name is 'Apollo'.",
+      "solution": "SELECT name FROM employees WHERE id IN (SELECT employee_id FROM assignments WHERE project_id = (SELECT id FROM projects WHERE name = 'Apollo'));"
+    },
+    {
+      "id": "su10",
+      "prompt": "Correlated: show `name`, `salary` of employees earning **above the average of their own department**.",
+      "hint": "The inner AVG filters `WHERE dept_id = e.dept_id`, referencing the outer row.",
+      "solution": "SELECT name, salary FROM employees e WHERE salary > (SELECT AVG(salary) FROM employees WHERE dept_id = e.dept_id);"
+    },
+    {
+      "id": "su11",
+      "prompt": "Show `name`, `salary`, and `dept_id` of the **highest-paid employee in each department**.",
+      "hint": "`salary = (SELECT MAX(salary) FROM employees WHERE dept_id = e.dept_id)`.",
+      "solution": "SELECT name, salary, dept_id FROM employees e WHERE salary = (SELECT MAX(salary) FROM employees WHERE dept_id = e.dept_id);"
+    },
+    {
+      "id": "su12",
+      "prompt": "List project `name`s whose `budget` is above the **average project budget**.",
+      "hint": "Scalar subquery over `projects`.",
+      "solution": "SELECT name FROM projects WHERE budget > (SELECT AVG(budget) FROM projects);"
+    },
+    {
+      "id": "su13",
+      "prompt": "Using `EXISTS`, list the names of departments that have **at least one project**.",
+      "hint": "`WHERE EXISTS (SELECT 1 FROM projects p WHERE p.dept_id = d.id)`.",
+      "solution": "SELECT d.name FROM departments d WHERE EXISTS (SELECT 1 FROM projects p WHERE p.dept_id = d.id);"
+    },
+    {
+      "id": "su14",
+      "prompt": "Using `NOT EXISTS`, find the department(s) with **no projects**.",
+      "hint": "Same as before with NOT.",
+      "solution": "SELECT d.name FROM departments d WHERE NOT EXISTS (SELECT 1 FROM projects p WHERE p.dept_id = d.id);"
+    },
+    {
+      "id": "su15",
+      "prompt": "Using `EXISTS`, list the names of employees who have **at least one assignment**.",
+      "hint": "Correlate on `a.employee_id = e.id`.",
+      "solution": "SELECT e.name FROM employees e WHERE EXISTS (SELECT 1 FROM assignments a WHERE a.employee_id = e.id);"
+    },
+    {
+      "id": "su16",
+      "prompt": "List the names of everyone whose manager is **Maya** (look up her id with a subquery).",
+      "hint": "`manager_id = (SELECT id FROM employees WHERE name = 'Maya')`.",
+      "solution": "SELECT name FROM employees WHERE manager_id = (SELECT id FROM employees WHERE name = 'Maya');"
+    },
+    {
+      "id": "su17",
+      "prompt": "List the names of employees who **are somebody's manager**.",
+      "hint": "Their id appears in the `manager_id` column.",
+      "solution": "SELECT name FROM employees WHERE id IN (SELECT manager_id FROM employees WHERE manager_id IS NOT NULL);"
+    },
+    {
+      "id": "su18",
+      "prompt": "List the names of employees who are **not** anyone's manager. (Careful: the `manager_id` column contains NULLs!)",
+      "hint": "With `NOT IN`, the subquery must exclude NULLs — or use `NOT EXISTS`.",
+      "solution": "SELECT name FROM employees WHERE id NOT IN (SELECT manager_id FROM employees WHERE manager_id IS NOT NULL);"
+    },
+    {
+      "id": "su19",
+      "prompt": "Subquery in SELECT: show every department `name` with its `headcount` — including departments with zero employees.",
+      "hint": "A correlated `(SELECT COUNT(*) …)` in the SELECT list.",
+      "solution": "SELECT d.name, (SELECT COUNT(*) FROM employees e WHERE e.dept_id = d.id) AS headcount FROM departments d;"
+    },
+    {
+      "id": "su20",
+      "prompt": "Show every project `name` with `total_hours` — the sum of assignment hours on it.",
+      "hint": "Correlated `SUM(hours)` in the SELECT list (or a join + GROUP BY).",
+      "solution": "SELECT p.name, (SELECT SUM(a.hours) FROM assignments a WHERE a.project_id = p.id) AS total_hours FROM projects p;"
+    },
+    {
+      "id": "su21",
+      "prompt": "Derived table: using a subquery in FROM that computes average salary per `dept_id`, show department `name` and `avg_salary` (rounded to 2 decimals) for departments averaging **above 80000**.",
+      "hint": "`FROM (SELECT dept_id, AVG(salary) AS avg_sal … GROUP BY dept_id) t JOIN departments …`.",
+      "solution": "SELECT d.name, ROUND(t.avg_sal, 2) AS avg_salary FROM (SELECT dept_id, AVG(salary) AS avg_sal FROM employees GROUP BY dept_id) t JOIN departments d ON d.id = t.dept_id WHERE t.avg_sal > 80000;"
+    },
+    {
+      "id": "su22",
+      "prompt": "Show `name` and `salary` of employees who earn **more than every Sales-department employee**.",
+      "hint": "More than every = greater than the `MAX` salary in Sales. Find Sales' dept id with a nested subquery.",
+      "solution": "SELECT name, salary FROM employees WHERE salary > (SELECT MAX(salary) FROM employees WHERE dept_id = (SELECT id FROM departments WHERE name = 'Sales'));"
+    },
+    {
+      "id": "su23",
+      "prompt": "Show `name` and `salary` of non-manager-titled employees who still earn **more than at least one Manager**. (Titles containing `Manager`.)",
+      "hint": "More than at least one = greater than the `MIN` manager salary. Exclude manager titles with `NOT LIKE`.",
+      "solution": "SELECT name, salary FROM employees WHERE title NOT LIKE '%Manager%' AND salary > (SELECT MIN(salary) FROM employees WHERE title LIKE '%Manager%');"
+    },
+    {
+      "id": "su24",
+      "prompt": "Find the **second-highest** salary in the company: show the `name` and `salary` of whoever earns it.",
+      "hint": "The max of everything below the max: `salary = (SELECT MAX(salary) FROM employees WHERE salary < (SELECT MAX(salary) FROM employees))`.",
+      "solution": "SELECT name, salary FROM employees WHERE salary = (SELECT MAX(salary) FROM employees WHERE salary < (SELECT MAX(salary) FROM employees));"
+    },
+    {
+      "id": "su25",
+      "prompt": "List the names of employees assigned to **more than one** project.",
+      "hint": "The subquery groups `assignments` by employee and keeps those `HAVING COUNT(*) > 1`.",
+      "solution": "SELECT name FROM employees WHERE id IN (SELECT employee_id FROM assignments GROUP BY employee_id HAVING COUNT(*) > 1);"
+    },
+    {
+      "id": "su26",
+      "prompt": "Which departments have a **total project budget over 100000**? Show the department `name`.",
+      "hint": "Group `projects` by `dept_id` in the subquery with `HAVING SUM(budget) > 100000`.",
+      "solution": "SELECT name FROM departments WHERE id IN (SELECT dept_id FROM projects GROUP BY dept_id HAVING SUM(budget) > 100000);"
+    },
+    {
+      "id": "su27",
+      "prompt": "List the names of employees in the **same department as Ethan** — excluding Ethan himself.",
+      "hint": "Look up Ethan's `dept_id` in a subquery; add `AND name <> 'Ethan'`.",
+      "solution": "SELECT name FROM employees WHERE dept_id = (SELECT dept_id FROM employees WHERE name = 'Ethan') AND name <> 'Ethan';"
+    },
+    {
+      "id": "su28",
+      "prompt": "Which single project has the **most total hours** logged? Show its `name` and `total_hours`. Use a derived table.",
+      "hint": "Build `(SELECT project_id, SUM(hours) … GROUP BY project_id)` in FROM, join to projects, order and LIMIT 1.",
+      "solution": "SELECT p.name, t.total_hours FROM (SELECT project_id, SUM(hours) AS total_hours FROM assignments GROUP BY project_id) t JOIN projects p ON p.id = t.project_id ORDER BY t.total_hours DESC LIMIT 1;"
+    },
+    {
+      "id": "su29",
+      "prompt": "Correlated: show `name`, `title`, `salary` of employees who earn **strictly more than the average salary for their job title**.",
+      "hint": "Correlate on `title = e.title` instead of department.",
+      "solution": "SELECT name, title, salary FROM employees e WHERE salary > (SELECT AVG(salary) FROM employees WHERE title = e.title);"
+    },
+    {
+      "id": "su30",
+      "prompt": "The finale: list the names of employees who work on **every project of their own department**. (Hint: no project of my department exists that I'm not assigned to.)",
+      "hint": "Double NOT EXISTS: no project `p` with `p.dept_id = e.dept_id` for which no assignment links `e` to `p`.",
+      "solution": "SELECT e.name FROM employees e WHERE EXISTS (SELECT 1 FROM projects p WHERE p.dept_id = e.dept_id) AND NOT EXISTS (SELECT 1 FROM projects p WHERE p.dept_id = e.dept_id AND NOT EXISTS (SELECT 1 FROM assignments a WHERE a.employee_id = e.id AND a.project_id = p.id));"
+    }
+  ]
+}

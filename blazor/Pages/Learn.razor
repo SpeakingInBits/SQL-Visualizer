@@ -1,14 +1,16 @@
 @page "/learn"
-@using SqlVisualizer.Components.Learn
 @inject ContentService Content
+@inject ProgressService Progress
+@inject NavigationManager Nav
 
 <PageTitle>Learn SQL — SQL Visualizer</PageTitle>
 
 <div class="learn-page">
     <header class="learn-hero">
         <h1>Learn SQL</h1>
-        <p>Work through interactive lessons. Every query runs live against a sample database —
-           hit <strong>⚡ Visualize</strong> on any cell to watch it animate.</p>
+        <p>A full entry-level course for database developers. Work through the units in
+           order — every query runs live against a sample database, and you can hit
+           <strong>⚡ Visualize</strong> on any cell to watch it animate.</p>
     </header>
 
     @if (_loading)
@@ -25,14 +27,55 @@
     }
     else
     {
-        <div class="lesson-grid">
-            @foreach (var l in _lessons)
+        <div class="course-progress">
+            <div class="ps-bar"><div class="ps-bar-fill" style="width:@(OverallPercent)%"></div></div>
+            <span class="ps-count">@_completedCount of @_lessons.Count units complete</span>
+            @if (_completedCount > 0)
             {
-                <a class="lesson-card" href="learn/@l.Id">
-                    <span class="lc-badge">@l.Database</span>
-                    <h3>@l.Title</h3>
-                    <p>@l.Description</p>
-                </a>
+                <button class="btn-secondary course-reset" @onclick="ResetProgress"
+                        title="Clear all course progress">Reset progress</button>
+            }
+        </div>
+
+        <div class="course-path">
+            @for (int i = 0; i < _lessons.Count; i++)
+            {
+                var l = _lessons[i];
+                var status = StatusOf(i);
+                var unit = i + 1;
+                <div class="unit-card unit-@status">
+                    <div class="unit-marker">
+                        @if (status == "done") { <span class="um-icon um-done">✓</span> }
+                        else if (status == "current") { <span class="um-icon um-current">@unit</span> }
+                        else { <span class="um-icon um-locked">@unit</span> }
+                        @if (i < _lessons.Count - 1) { <span class="um-line"></span> }
+                    </div>
+                    <div class="unit-body">
+                        @if (status == "locked" && _confirmSkipId != l.Id)
+                        {
+                            <button class="unit-link unit-link-locked" @onclick="() => _confirmSkipId = l.Id">
+                                <UnitCardBody Meta="l" Solved="@Progress.SolvedCount(l.Id)" Locked="true" />
+                            </button>
+                        }
+                        else if (status == "locked")
+                        {
+                            <div class="unit-link unit-link-locked">
+                                <UnitCardBody Meta="l" Solved="@Progress.SolvedCount(l.Id)" Locked="true" />
+                                <div class="unit-skip-confirm">
+                                    <span>The course builds on earlier units — sure you want to skip ahead?</span>
+                                    <button class="btn-run" @onclick="() => SkipTo(l.Id)">Skip ahead</button>
+                                    <button class="btn-secondary" @onclick="() => _confirmSkipId = null">Not now</button>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <a class="unit-link" href="learn/@l.Id">
+                                <UnitCardBody Meta="l" Solved="@Progress.SolvedCount(l.Id)" Locked="false" />
+                            </a>
+                        }
+                    </div>
+                </div>
             }
         </div>
     }
@@ -42,15 +85,38 @@
     private List<LessonMeta> _lessons = new();
     private bool _loading = true;
     private string? _error;
+    private int _completedCount;
+    private string? _confirmSkipId;
+
+    private int OverallPercent => _lessons.Count == 0 ? 0 : _completedCount * 100 / _lessons.Count;
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
+            await Progress.EnsureLoadedAsync();
             var manifest = await Content.LoadManifestAsync();
             _lessons = manifest.Lessons.OrderBy(l => l.Order).ToList();
+            _completedCount = _lessons.Count(l => Progress.IsLessonComplete(l.Id));
         }
         catch (Exception ex) { _error = ex.Message; }
         finally { _loading = false; }
+    }
+
+    // done = completed; current = first incomplete; locked = anything after that.
+    private string StatusOf(int index)
+    {
+        if (Progress.IsLessonComplete(_lessons[index].Id)) return "done";
+        int firstIncomplete = _lessons.FindIndex(l => !Progress.IsLessonComplete(l.Id));
+        return index == firstIncomplete ? "current" : "locked";
+    }
+
+    private void SkipTo(string id) => Nav.NavigateTo($"learn/{id}");
+
+    private async Task ResetProgress()
+    {
+        await Progress.ResetAsync();
+        _completedCount = 0;
+        _confirmSkipId = null;
     }
 }

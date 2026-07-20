@@ -1,0 +1,24 @@
+@* Shared inner layout for a course-path unit card (used for both linked and locked states). *@
+
+<span class="ucb">
+    @if (Meta.Database.Length > 0) { <span class="lc-badge">@Meta.Database</span> }
+    else { <span class="lc-badge">quiz</span> }
+    <h3>@Meta.Title @if (Locked) { <span class="ucb-lock">🔒</span> }</h3>
+    <p>@Meta.Description</p>
+    @if (Meta.ExerciseCount > 0)
+    {
+        <span class="ucb-exercises">
+            @(Meta.Kind == "quiz"
+                ? $"{Meta.ExerciseCount} quiz questions"
+                : Solved > 0
+                    ? $"{Solved}/{Meta.ExerciseCount} exercises solved"
+                    : $"{Meta.ExerciseCount} exercises")
+        </span>
+    }
+</span>
+
+@code {
+    [Parameter, EditorRequired] public LessonMeta Meta { get; set; } = null!;
+    [Parameter] public int Solved { get; set; }
+    [Parameter] public bool Locked { get; set; }
+}

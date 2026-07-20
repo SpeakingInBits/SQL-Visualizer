@@ -1,11 +1,67 @@
 {
   "lessons": [
     {
+      "id": "select-basics",
+      "title": "Select Queries",
+      "description": "The heart of SQL: pick columns with SELECT, filter rows with WHERE, and control the output with ORDER BY and LIMIT.",
+      "database": "movies",
+      "order": 1,
+      "kind": "lesson",
+      "exerciseCount": 30
+    },
+    {
       "id": "joins",
-      "title": "Joining Tables",
-      "description": "Combine rows from related tables with INNER JOIN, aliases, and multi-table chains — then watch each join form step by step.",
+      "title": "Joins & Set Operators",
+      "description": "Combine tables with INNER and OUTER joins, stack results with UNION and friends, and join a table to itself.",
       "database": "school",
-      "order": 1
+      "order": 2,
+      "kind": "lesson",
+      "exerciseCount": 30
+    },
+    {
+      "id": "summary-queries",
+      "title": "Summary Queries",
+      "description": "Aggregate functions, GROUP BY, and HAVING: turn thousands of rows into counts, totals, and averages.",
+      "database": "sales",
+      "order": 3,
+      "kind": "lesson",
+      "exerciseCount": 30
+    },
+    {
+      "id": "subqueries",
+      "title": "Subqueries",
+      "description": "Queries inside queries: scalar subqueries, IN and EXISTS, correlated subqueries, and derived tables.",
+      "database": "company",
+      "order": 4,
+      "kind": "lesson",
+      "exerciseCount": 30
+    },
+    {
+      "id": "modifying-data",
+      "title": "Insert, Update & Delete",
+      "description": "Change data, not just read it: add rows with INSERT, fix them with UPDATE, and remove them with DELETE — safely.",
+      "database": "library",
+      "order": 5,
+      "kind": "lesson",
+      "exerciseCount": 26
+    },
+    {
+      "id": "ddl",
+      "title": "DDL: Creating Tables & Schemas",
+      "description": "CREATE, ALTER, and DROP: define tables, constraints, keys, indexes, and views in an empty sandbox database.",
+      "database": "sandbox",
+      "order": 6,
+      "kind": "lesson",
+      "exerciseCount": 24
+    },
+    {
+      "id": "database-design",
+      "title": "Database Design Fundamentals",
+      "description": "Entities, keys, relationships, and normalization: how to shape tables so your data stays consistent — with a graded knowledge check.",
+      "database": "",
+      "order": 7,
+      "kind": "quiz",
+      "exerciseCount": 30
     }
   ]
 }

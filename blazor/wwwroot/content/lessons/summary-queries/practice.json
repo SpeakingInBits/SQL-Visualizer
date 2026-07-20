@@ -1,0 +1,184 @@
+{
+  "problems": [
+    {
+      "id": "sq01",
+      "prompt": "How many orders are there in total? Return one row with a column named `order_count`.",
+      "hint": "`COUNT(*)` counts rows.",
+      "solution": "SELECT COUNT(*) AS order_count FROM orders;"
+    },
+    {
+      "id": "sq02",
+      "prompt": "What is the total quantity of items ever sold? One row, column `total_items`.",
+      "hint": "`SUM(quantity)` over `order_items`.",
+      "solution": "SELECT SUM(quantity) AS total_items FROM order_items;"
+    },
+    {
+      "id": "sq03",
+      "prompt": "What is the average product `price`, rounded to 2 decimals? Column: `avg_price`.",
+      "hint": "Wrap `AVG(price)` in `ROUND(…, 2)`.",
+      "solution": "SELECT ROUND(AVG(price), 2) AS avg_price FROM products;"
+    },
+    {
+      "id": "sq04",
+      "prompt": "Show the cheapest and most expensive product price in one row: columns `cheapest` and `priciest`.",
+      "hint": "`MIN` and `MAX` can sit side by side in one SELECT.",
+      "solution": "SELECT MIN(price) AS cheapest, MAX(price) AS priciest FROM products;"
+    },
+    {
+      "id": "sq05",
+      "prompt": "How many **different** customers have placed at least one order? Column: `customers_who_ordered`.",
+      "hint": "`COUNT(DISTINCT customer_id)`.",
+      "solution": "SELECT COUNT(DISTINCT customer_id) AS customers_who_ordered FROM orders;"
+    },
+    {
+      "id": "sq06",
+      "prompt": "Count orders **per status**: show `status` and `order_count`.",
+      "hint": "`GROUP BY status`.",
+      "solution": "SELECT status, COUNT(*) AS order_count FROM orders GROUP BY status;"
+    },
+    {
+      "id": "sq07",
+      "prompt": "Count orders per `customer_id`: show `customer_id` and `order_count`.",
+      "hint": "Group by the customer id column.",
+      "solution": "SELECT customer_id, COUNT(*) AS order_count FROM orders GROUP BY customer_id;"
+    },
+    {
+      "id": "sq08",
+      "prompt": "Same idea but human-readable: show each ordering customer's `name` with their `order_count` (customers with no orders may be absent).",
+      "hint": "JOIN `customers` to `orders`, then `GROUP BY c.name`.",
+      "solution": "SELECT c.name, COUNT(*) AS order_count FROM customers c JOIN orders o ON o.customer_id = c.id GROUP BY c.name;"
+    },
+    {
+      "id": "sq09",
+      "prompt": "Revenue per order: show `order_id` and `revenue` (sum of `quantity * unit_price`) for every order that has items.",
+      "hint": "Group `order_items` by `order_id`.",
+      "solution": "SELECT order_id, SUM(quantity * unit_price) AS revenue FROM order_items GROUP BY order_id;"
+    },
+    {
+      "id": "sq10",
+      "prompt": "How many products are in each `category`? Columns: `category`, `product_count`.",
+      "hint": "Group the `products` table.",
+      "solution": "SELECT category, COUNT(*) AS product_count FROM products GROUP BY category;"
+    },
+    {
+      "id": "sq11",
+      "prompt": "Average product price **per category**, rounded to 2 decimals: `category`, `avg_price`.",
+      "hint": "`ROUND(AVG(price), 2)` with `GROUP BY category`.",
+      "solution": "SELECT category, ROUND(AVG(price), 2) AS avg_price FROM products GROUP BY category;"
+    },
+    {
+      "id": "sq12",
+      "prompt": "Total quantity sold per product: show product `name` and `total_qty`.",
+      "hint": "Join `order_items` to `products`, group by the product name.",
+      "solution": "SELECT p.name, SUM(oi.quantity) AS total_qty FROM order_items oi JOIN products p ON p.id = oi.product_id GROUP BY p.name;"
+    },
+    {
+      "id": "sq13",
+      "prompt": "Revenue per product: `name` and `revenue` (sum of `quantity * unit_price`, rounded to 2 decimals).",
+      "hint": "Same join as before, but SUM the product of the two columns.",
+      "solution": "SELECT p.name, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue FROM order_items oi JOIN products p ON p.id = oi.product_id GROUP BY p.name;"
+    },
+    {
+      "id": "sq14",
+      "prompt": "Orders per month: show `month` (like `2024-03`) and `order_count`.",
+      "hint": "`substr(order_date, 1, 7)` extracts the year-month; group by it.",
+      "solution": "SELECT substr(order_date, 1, 7) AS month, COUNT(*) AS order_count FROM orders GROUP BY substr(order_date, 1, 7);"
+    },
+    {
+      "id": "sq15",
+      "prompt": "Revenue per customer **city**: show `city` and `revenue` (rounded to 2 decimals).",
+      "hint": "customers → orders → order_items is a 3-table join; then group by `city`.",
+      "solution": "SELECT c.city, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue FROM customers c JOIN orders o ON o.customer_id = c.id JOIN order_items oi ON oi.order_id = o.id GROUP BY c.city;"
+    },
+    {
+      "id": "sq16",
+      "prompt": "Which categories have **more than 2** products? Show `category` and `product_count`.",
+      "hint": "Filter the groups with `HAVING COUNT(*) > 2`.",
+      "solution": "SELECT category, COUNT(*) AS product_count FROM products GROUP BY category HAVING COUNT(*) > 2;"
+    },
+    {
+      "id": "sq17",
+      "prompt": "Which customers placed **3 or more** orders? Show `name` and `order_count`.",
+      "hint": "`HAVING COUNT(*) >= 3` after grouping by name.",
+      "solution": "SELECT c.name, COUNT(*) AS order_count FROM customers c JOIN orders o ON o.customer_id = c.id GROUP BY c.name HAVING COUNT(*) >= 3;"
+    },
+    {
+      "id": "sq18",
+      "prompt": "Which products appear in **3 or more** order lines? Show `name` and `times_ordered` (count of order_items rows).",
+      "hint": "Count rows per product, then `HAVING COUNT(*) >= 3`.",
+      "solution": "SELECT p.name, COUNT(*) AS times_ordered FROM order_items oi JOIN products p ON p.id = oi.product_id GROUP BY p.name HAVING COUNT(*) >= 3;"
+    },
+    {
+      "id": "sq19",
+      "prompt": "Count only **shipped** orders per customer: `name`, `shipped_count`. Customers with no shipped orders may be absent.",
+      "hint": "`WHERE o.status = 'shipped'` filters rows *before* grouping.",
+      "solution": "SELECT c.name, COUNT(*) AS shipped_count FROM customers c JOIN orders o ON o.customer_id = c.id WHERE o.status = 'shipped' GROUP BY c.name;"
+    },
+    {
+      "id": "sq20",
+      "prompt": "Which customers have spent **more than $300** in total across all their order items? Show `name` and `total_spent` (rounded to 2 decimals).",
+      "hint": "3-table join, group by name, `HAVING SUM(quantity * unit_price) > 300`.",
+      "solution": "SELECT c.name, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS total_spent FROM customers c JOIN orders o ON o.customer_id = c.id JOIN order_items oi ON oi.order_id = o.id GROUP BY c.name HAVING SUM(oi.quantity * oi.unit_price) > 300;"
+    },
+    {
+      "id": "sq21",
+      "prompt": "Total quantity sold per product **category**: `category`, `total_qty`.",
+      "hint": "order_items → products, group by `p.category`.",
+      "solution": "SELECT p.category, SUM(oi.quantity) AS total_qty FROM order_items oi JOIN products p ON p.id = oi.product_id GROUP BY p.category;"
+    },
+    {
+      "id": "sq22",
+      "prompt": "For each customer who has ordered, show `name`, their earliest order date (`first_order`), and latest (`last_order`).",
+      "hint": "`MIN(order_date)` and `MAX(order_date)` per group.",
+      "solution": "SELECT c.name, MIN(o.order_date) AS first_order, MAX(o.order_date) AS last_order FROM customers c JOIN orders o ON o.customer_id = c.id GROUP BY c.name;"
+    },
+    {
+      "id": "sq23",
+      "prompt": "Count orders per `status`, but only for orders placed on or after **2024-04-01**. Columns: `status`, `order_count`.",
+      "hint": "Date strings compare correctly: `WHERE order_date >= '2024-04-01'`.",
+      "solution": "SELECT status, COUNT(*) AS order_count FROM orders WHERE order_date >= '2024-04-01' GROUP BY status;"
+    },
+    {
+      "id": "sq24",
+      "prompt": "For each order, how many **distinct products** does it contain? Columns: `order_id`, `product_kinds`.",
+      "hint": "`COUNT(DISTINCT product_id)` grouped by order.",
+      "solution": "SELECT order_id, COUNT(DISTINCT product_id) AS product_kinds FROM order_items GROUP BY order_id;"
+    },
+    {
+      "id": "sq25",
+      "prompt": "Revenue per customer counting **only shipped orders**: `name`, `revenue` (rounded to 2 decimals).",
+      "hint": "`WHERE o.status = 'shipped'` plus the 3-table revenue pattern.",
+      "solution": "SELECT c.name, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue FROM customers c JOIN orders o ON o.customer_id = c.id JOIN order_items oi ON oi.order_id = o.id WHERE o.status = 'shipped' GROUP BY c.name;"
+    },
+    {
+      "id": "sq26",
+      "prompt": "Rank the categories by money made: `category` and `revenue` (rounded to 2 decimals), **highest revenue first**.",
+      "hint": "Group by category, then `ORDER BY revenue DESC` — you can order by an alias.",
+      "solution": "SELECT p.category, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue FROM order_items oi JOIN products p ON p.id = oi.product_id GROUP BY p.category ORDER BY revenue DESC;"
+    },
+    {
+      "id": "sq27",
+      "prompt": "Monthly revenue report: `month` (like `2024-03`) and `revenue` (rounded to 2 decimals), ordered by month.",
+      "hint": "Join orders to order_items, group by `substr(o.order_date, 1, 7)`.",
+      "solution": "SELECT substr(o.order_date, 1, 7) AS month, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue FROM orders o JOIN order_items oi ON oi.order_id = o.id GROUP BY substr(o.order_date, 1, 7) ORDER BY month;"
+    },
+    {
+      "id": "sq28",
+      "prompt": "Which customer has placed **no orders at all**? Show their `name` using a LEFT JOIN and an aggregate (no subqueries needed).",
+      "hint": "LEFT JOIN, group by name, `HAVING COUNT(o.id) = 0` — `COUNT(column)` skips NULLs.",
+      "solution": "SELECT c.name FROM customers c LEFT JOIN orders o ON o.customer_id = c.id GROUP BY c.name HAVING COUNT(o.id) = 0;"
+    },
+    {
+      "id": "sq29",
+      "prompt": "What is the **average revenue per order**, rounded to 2 decimals? One row, column `avg_order_revenue`. (Total revenue divided by the number of distinct orders.)",
+      "hint": "`SUM(quantity * unit_price) / COUNT(DISTINCT order_id)` inside one ROUND.",
+      "solution": "SELECT ROUND(SUM(quantity * unit_price) / COUNT(DISTINCT order_id), 2) AS avg_order_revenue FROM order_items;"
+    },
+    {
+      "id": "sq30",
+      "prompt": "The finale: the **single best-selling product** by total quantity — show `name` and `total_qty`.",
+      "hint": "Group, `ORDER BY total_qty DESC`, and `LIMIT 1`.",
+      "solution": "SELECT p.name, SUM(oi.quantity) AS total_qty FROM order_items oi JOIN products p ON p.id = oi.product_id GROUP BY p.name ORDER BY total_qty DESC LIMIT 1;"
+    }
+  ]
+}

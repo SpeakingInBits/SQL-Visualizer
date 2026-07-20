@@ -1,0 +1,119 @@
+@using Markdig
+@inject ProgressService Progress
+
+<section class="quiz-section">
+    <h2>Knowledge Check</h2>
+    <p class="ps-intro">
+        Answer the questions below, then submit to see your score.
+        Score @((int)(Quiz.PassThreshold * 100))% or better to complete this lesson —
+        you can retake it as many times as you like.
+    </p>
+
+    @if (_best != null)
+    {
+        <div class="quiz-best">Best attempt so far: @_best.Correct / @_best.Total</div>
+    }
+
+    @{ int qn = 0; }
+    @foreach (var q in Quiz.Questions)
+    {
+        qn++;
+        var qIdx = qn - 1;
+        var chosen = _answers.TryGetValue(q.Id, out var sel) ? sel : -1;
+        var graded = _submitted;
+        <div class="quiz-question @(graded ? (chosen == q.Answer ? "qq-right" : "qq-wrong") : "")">
+            <div class="qq-text"><span class="qq-num">@qn.</span> @((MarkupString)RenderInline(q.Question))</div>
+            <div class="qq-choices">
+                @for (int ci = 0; ci < q.Choices.Count; ci++)
+                {
+                    var choiceIdx = ci;
+                    var cls = "qq-choice";
+                    if (graded && choiceIdx == q.Answer) cls += " qq-correct";
+                    else if (graded && choiceIdx == chosen && chosen != q.Answer) cls += " qq-incorrect";
+                    else if (!graded && choiceIdx == chosen) cls += " qq-selected";
+                    <label class="@cls">
+                        <input type="radio" name="quiz-@qIdx" checked="@(chosen == choiceIdx)"
+                               disabled="@graded" @onchange="() => Select(q.Id, choiceIdx)" />
+                        <span>@((MarkupString)RenderInline(q.Choices[choiceIdx]))</span>
+                    </label>
+                }
+            </div>
+            @if (graded && q.Explanation != null)
+            {
+                <div class="qq-explain">@((MarkupString)RenderInline(q.Explanation))</div>
+            }
+        </div>
+    }
+
+    <div class="quiz-footer">
+        @if (!_submitted)
+        {
+            <button class="btn-run quiz-submit" disabled="@(_answers.Count < Quiz.Questions.Count)"
+                    @onclick="Submit">Submit answers</button>
+            @if (_answers.Count < Quiz.Questions.Count)
+            {
+                <span class="lc-hint">@(Quiz.Questions.Count - _answers.Count) question(s) unanswered</span>
+            }
+        }
+        else
+        {
+            <div class="quiz-score @(_passed ? "qs-pass" : "qs-fail")">
+                You scored <strong>@_score / @Quiz.Questions.Count</strong>.
+                @(_passed ? "You passed — lesson complete! 🎉"
+                          : $"You need {(int)Math.Ceiling(Quiz.PassThreshold * Quiz.Questions.Count)} correct to pass. Review the explanations above and try again.")
+            </div>
+            <button class="btn-secondary" @onclick="Retake">Retake quiz</button>
+        }
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public string LessonId { get; set; } = "";
+    [Parameter, EditorRequired] public Quiz Quiz { get; set; } = null!;
+    [Parameter] public EventCallback OnPassed { get; set; }
+
+    private readonly Dictionary<string, int> _answers = new();
+    private bool _submitted, _passed;
+    private int _score;
+    private ProgressService.QuizRecord? _best;
+
+    private static readonly MarkdownPipeline InlinePipeline =
+        new MarkdownPipelineBuilder().Build();
+
+    private static string RenderInline(string md)
+    {
+        var html = Markdown.ToHtml(md, InlinePipeline).Trim();
+        if (html.StartsWith("<p>") && html.EndsWith("</p>"))
+            html = html[3..^4];
+        return html;
+    }
+
+    protected override void OnParametersSet()
+        => _best = Progress.QuizScore(LessonId);
+
+    private void Select(string questionId, int choice)
+    {
+        if (!_submitted) _answers[questionId] = choice;
+    }
+
+    private async Task Submit()
+    {
+        _score = Quiz.Questions.Count(q => _answers.TryGetValue(q.Id, out var a) && a == q.Answer);
+        _submitted = true;
+        _passed = _score >= Quiz.PassThreshold * Quiz.Questions.Count;
+        await Progress.RecordQuizScoreAsync(LessonId, _score, Quiz.Questions.Count);
+        _best = Progress.QuizScore(LessonId);
+        if (_passed)
+        {
+            await Progress.MarkLessonCompleteAsync(LessonId);
+            await OnPassed.InvokeAsync();
+        }
+    }
+
+    private void Retake()
+    {
+        _answers.Clear();
+        _submitted = false;
+        _score = 0;
+    }
+}

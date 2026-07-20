@@ -1,0 +1,212 @@
+{
+  "problems": [
+    {
+      "id": "md01",
+      "type": "state",
+      "prompt": "Insert a new book: id **9**, title `The Left Hand of Darkness`, author `Ursula K. Le Guin`, year **1969**, available **1**.",
+      "hint": "`INSERT INTO books (id, title, author, year, available) VALUES (…);`",
+      "solution": "INSERT INTO books (id, title, author, year, available) VALUES (9, 'The Left Hand of Darkness', 'Ursula K. Le Guin', 1969, 1);",
+      "verify": "SELECT id, title, author, year, available FROM books ORDER BY id;"
+    },
+    {
+      "id": "md02",
+      "type": "state",
+      "prompt": "Register a new member: id **6**, name `Ada Quinn`, joined `2024-06-01`.",
+      "hint": "Same INSERT shape, `members` table.",
+      "solution": "INSERT INTO members (id, name, joined) VALUES (6, 'Ada Quinn', '2024-06-01');",
+      "verify": "SELECT id, name, joined FROM members ORDER BY id;"
+    },
+    {
+      "id": "md03",
+      "type": "state",
+      "prompt": "In a **single INSERT statement**, add two books: (9, `Kindred`, `Octavia E. Butler`, 1979, 1) and (10, `Solaris`, `Stanislaw Lem`, 1961, 1).",
+      "hint": "Stack two value lists: `VALUES (…), (…);`",
+      "solution": "INSERT INTO books (id, title, author, year, available) VALUES (9, 'Kindred', 'Octavia E. Butler', 1979, 1), (10, 'Solaris', 'Stanislaw Lem', 1961, 1);",
+      "verify": "SELECT id, title, author, year, available FROM books ORDER BY id;"
+    },
+    {
+      "id": "md04",
+      "type": "state",
+      "prompt": "Insert book id **9**, title `Persuasion`, author `Jane Austen`, year **1817** — *without* mentioning the `available` column, so it takes its default.",
+      "hint": "List only the four columns you're providing.",
+      "solution": "INSERT INTO books (id, title, author, year) VALUES (9, 'Persuasion', 'Jane Austen', 1817);",
+      "verify": "SELECT id, title, author, year, available FROM books ORDER BY id;"
+    },
+    {
+      "id": "md05",
+      "type": "state",
+      "prompt": "Mark book id **4** (Emma) as checked out: set `available` to 0.",
+      "hint": "`UPDATE books SET available = 0 WHERE id = 4;`",
+      "solution": "UPDATE books SET available = 0 WHERE id = 4;",
+      "verify": "SELECT id, available FROM books ORDER BY id;"
+    },
+    {
+      "id": "md06",
+      "type": "state",
+      "prompt": "Member 3's name was misspelled — change it from `June Park` to `June Parks`.",
+      "hint": "UPDATE with a WHERE on the member id (or the old name).",
+      "solution": "UPDATE members SET name = 'June Parks' WHERE id = 3;",
+      "verify": "SELECT id, name, joined FROM members ORDER BY id;"
+    },
+    {
+      "id": "md07",
+      "type": "state",
+      "prompt": "Append ` (Classic)` to the title of every book published **before 1900**.",
+      "hint": "String concatenation is `||`: `SET title = title || ' (Classic)'`.",
+      "solution": "UPDATE books SET title = title || ' (Classic)' WHERE year < 1900;",
+      "verify": "SELECT id, title FROM books ORDER BY id;"
+    },
+    {
+      "id": "md08",
+      "type": "state",
+      "prompt": "Loan 1 was returned: set its `return_date` to `2024-06-02`.",
+      "hint": "UPDATE the `loans` row with id 1.",
+      "solution": "UPDATE loans SET return_date = '2024-06-02' WHERE id = 1;",
+      "verify": "SELECT id, book_id, member_id, loan_date, return_date FROM loans ORDER BY id;"
+    },
+    {
+      "id": "md09",
+      "type": "state",
+      "prompt": "Process a full return for loan **2**: set its `return_date` to `2024-06-04` **and** mark its book (id 6) as available again. (Two statements.)",
+      "hint": "An UPDATE on `loans`, then an UPDATE on `books` — run both together.",
+      "solution": "UPDATE loans SET return_date = '2024-06-04' WHERE id = 2; UPDATE books SET available = 1 WHERE id = 6;",
+      "verify": "SELECT l.id, l.return_date, b.available FROM loans l JOIN books b ON b.id = l.book_id ORDER BY l.id;"
+    },
+    {
+      "id": "md10",
+      "type": "state",
+      "prompt": "Library amnesty day: set **every** book's `available` to 1 — deliberately, with no WHERE clause.",
+      "hint": "This is the one time the missing WHERE is on purpose.",
+      "solution": "UPDATE books SET available = 1;",
+      "verify": "SELECT id, available FROM books ORDER BY id;"
+    },
+    {
+      "id": "md11",
+      "type": "state",
+      "prompt": "Fix a records error on book **1**: set its `year` to **1966** and its `available` to **0** — in one UPDATE statement.",
+      "hint": "Separate the assignments with a comma: `SET year = 1966, available = 0`.",
+      "solution": "UPDATE books SET year = 1966, available = 0 WHERE id = 1;",
+      "verify": "SELECT id, title, year, available FROM books ORDER BY id;"
+    },
+    {
+      "id": "md12",
+      "type": "state",
+      "prompt": "Delete loan record **3**.",
+      "hint": "`DELETE FROM loans WHERE …`",
+      "solution": "DELETE FROM loans WHERE id = 3;",
+      "verify": "SELECT id, book_id, member_id, loan_date, return_date FROM loans ORDER BY id;"
+    },
+    {
+      "id": "md13",
+      "type": "state",
+      "prompt": "Clean up history: delete **all loans that have been returned** (their `return_date` is not NULL).",
+      "hint": "`WHERE return_date IS NOT NULL`.",
+      "solution": "DELETE FROM loans WHERE return_date IS NOT NULL;",
+      "verify": "SELECT id, book_id, member_id, loan_date, return_date FROM loans ORDER BY id;"
+    },
+    {
+      "id": "md14",
+      "type": "state",
+      "prompt": "Member 5 (Lena Wolf) is moving away. Delete her **loan records first**, then her `members` row. (Two statements.)",
+      "hint": "Delete from `loans WHERE member_id = 5`, then from `members WHERE id = 5`.",
+      "solution": "DELETE FROM loans WHERE member_id = 5; DELETE FROM members WHERE id = 5;",
+      "verify": "SELECT (SELECT COUNT(*) FROM members WHERE id = 5) AS member_left, (SELECT COUNT(*) FROM loans WHERE member_id = 5) AS loans_left;"
+    },
+    {
+      "id": "md15",
+      "type": "state",
+      "prompt": "Check out a book: insert loan id **7** — book **7**, member **4**, loan date `2024-06-05`, no return date — and mark book 7 unavailable. (Two statements.)",
+      "hint": "INSERT into `loans` (omit `return_date` or pass NULL), then UPDATE `books`.",
+      "solution": "INSERT INTO loans (id, book_id, member_id, loan_date) VALUES (7, 7, 4, '2024-06-05'); UPDATE books SET available = 0 WHERE id = 7;",
+      "verify": "SELECT l.id, l.book_id, l.member_id, l.loan_date, l.return_date, b.available FROM loans l JOIN books b ON b.id = l.book_id ORDER BY l.id;"
+    },
+    {
+      "id": "md16",
+      "type": "state",
+      "prompt": "Empty the entire `loans` table with a single statement.",
+      "hint": "DELETE with no WHERE — here it's intentional.",
+      "solution": "DELETE FROM loans;",
+      "verify": "SELECT COUNT(*) AS loans_left FROM loans;"
+    },
+    {
+      "id": "md17",
+      "type": "state",
+      "prompt": "Bulk checkout via INSERT…SELECT: for **every available book**, insert a loan with id = book id + 100, that book's id, member **2**, date `2024-06-15` (no return date).",
+      "hint": "`INSERT INTO loans (id, book_id, member_id, loan_date) SELECT id + 100, id, 2, '2024-06-15' FROM books WHERE available = 1;`",
+      "solution": "INSERT INTO loans (id, book_id, member_id, loan_date) SELECT id + 100, id, 2, '2024-06-15' FROM books WHERE available = 1;",
+      "verify": "SELECT id, book_id, member_id, loan_date, return_date FROM loans ORDER BY id;"
+    },
+    {
+      "id": "md18",
+      "type": "state",
+      "prompt": "Using a subquery, set `available = 0` for every book that has **ever been loaned** (appears anywhere in `loans`).",
+      "hint": "`WHERE id IN (SELECT book_id FROM loans)`.",
+      "solution": "UPDATE books SET available = 0 WHERE id IN (SELECT book_id FROM loans);",
+      "verify": "SELECT id, available FROM books ORDER BY id;"
+    },
+    {
+      "id": "md19",
+      "type": "state",
+      "prompt": "Using a subquery, delete all loans belonging to the member named `Rosa Marin`.",
+      "hint": "`WHERE member_id = (SELECT id FROM members WHERE name = 'Rosa Marin')`.",
+      "solution": "DELETE FROM loans WHERE member_id = (SELECT id FROM members WHERE name = 'Rosa Marin');",
+      "verify": "SELECT id, book_id, member_id FROM loans ORDER BY id;"
+    },
+    {
+      "id": "md20",
+      "type": "state",
+      "prompt": "The library merged its branch records: for every member who joined **before 2024**, set `joined` to `2023-01-01`.",
+      "hint": "Date strings compare alphabetically, which works for ISO dates: `WHERE joined < '2024-01-01'`.",
+      "solution": "UPDATE members SET joined = '2023-01-01' WHERE joined < '2024-01-01';",
+      "verify": "SELECT id, name, joined FROM members ORDER BY id;"
+    },
+    {
+      "id": "md21",
+      "type": "state",
+      "prompt": "Three statements: register member id **6** `Nia Bell` (joined `2024-06-18`), insert loan id **8** — book **8**, member **6**, date `2024-06-20` — and mark book 8 unavailable.",
+      "hint": "INSERT member → INSERT loan → UPDATE book, all in one cell.",
+      "solution": "INSERT INTO members (id, name, joined) VALUES (6, 'Nia Bell', '2024-06-18'); INSERT INTO loans (id, book_id, member_id, loan_date) VALUES (8, 8, 6, '2024-06-20'); UPDATE books SET available = 0 WHERE id = 8;",
+      "verify": "SELECT m.name, l.book_id, l.loan_date, b.available FROM loans l JOIN members m ON m.id = l.member_id JOIN books b ON b.id = l.book_id WHERE l.id = 8;"
+    },
+    {
+      "id": "md22",
+      "type": "state",
+      "prompt": "Prune the catalog: delete every book that has **never been loaned**.",
+      "hint": "`WHERE id NOT IN (SELECT book_id FROM loans)`.",
+      "solution": "DELETE FROM books WHERE id NOT IN (SELECT book_id FROM loans);",
+      "verify": "SELECT id, title FROM books ORDER BY id;"
+    },
+    {
+      "id": "md23",
+      "type": "state",
+      "prompt": "A data-entry error: every loan dated `2024-05-01` actually happened on `2024-05-02`. Fix them.",
+      "hint": "UPDATE with a WHERE on `loan_date`.",
+      "solution": "UPDATE loans SET loan_date = '2024-05-02' WHERE loan_date = '2024-05-01';",
+      "verify": "SELECT id, loan_date FROM loans ORDER BY id;"
+    },
+    {
+      "id": "md24",
+      "type": "state",
+      "prompt": "One multi-row INSERT: register members **7** `Pia Chen` (joined `2024-07-01`) and **8** `Sam Ruiz` (joined `2024-07-02`).",
+      "hint": "Two value lists in one statement.",
+      "solution": "INSERT INTO members (id, name, joined) VALUES (7, 'Pia Chen', '2024-07-01'), (8, 'Sam Ruiz', '2024-07-02');",
+      "verify": "SELECT id, name, joined FROM members ORDER BY id;"
+    },
+    {
+      "id": "md25",
+      "type": "state",
+      "prompt": "Archive old records: delete every loan that started **before April 2024**.",
+      "hint": "`WHERE loan_date < '2024-04-01'`.",
+      "solution": "DELETE FROM loans WHERE loan_date < '2024-04-01';",
+      "verify": "SELECT id, loan_date FROM loans ORDER BY id;"
+    },
+    {
+      "id": "md26",
+      "type": "state",
+      "prompt": "The finale — Omar Reyes borrows `Emma` on `2024-06-25`: insert loan id **9**, looking up the book id and member id **with subqueries** (not hard-coded numbers), then mark that book unavailable.",
+      "hint": "`VALUES (9, (SELECT id FROM books WHERE title = 'Emma'), (SELECT id FROM members WHERE name = 'Omar Reyes'), '2024-06-25')` — then an UPDATE with the same book subquery.",
+      "solution": "INSERT INTO loans (id, book_id, member_id, loan_date) VALUES (9, (SELECT id FROM books WHERE title = 'Emma'), (SELECT id FROM members WHERE name = 'Omar Reyes'), '2024-06-25'); UPDATE books SET available = 0 WHERE title = 'Emma';",
+      "verify": "SELECT l.id, l.book_id, l.member_id, l.loan_date, b.available FROM loans l JOIN books b ON b.id = l.book_id WHERE l.id = 9;"
+    }
+  ]
+}

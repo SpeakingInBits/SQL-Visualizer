@@ -1,7 +1,9 @@
 {
   "id": "joins",
-  "title": "Joining Tables",
-  "description": "Combine rows from related tables with INNER JOIN, aliases, and multi-table chains — then watch each join form step by step.",
+  "title": "Joins & Set Operators",
+  "description": "Combine tables with INNER and OUTER joins, stack results with UNION and friends, and join a table to itself.",
   "database": "school",
-  "order": 1
+  "order": 2,
+  "kind": "lesson",
+  "exerciseCount": 30
 }

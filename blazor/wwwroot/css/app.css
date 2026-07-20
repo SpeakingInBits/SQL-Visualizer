@@ -327,3 +327,100 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 
+
+/* ── Learn: course path (index page) ─────────────────────────────────────── */
+.course-progress { display: flex; align-items: center; gap: 12px; max-width: 720px; margin-bottom: 26px; }
+.course-reset { margin-left: auto; }
+.ps-bar { flex: 1; height: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 5px; overflow: hidden; }
+.ps-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--green)); transition: width .3s; }
+.ps-count { color: var(--muted); font-size: 12px; white-space: nowrap; }
+
+.course-path { max-width: 720px; }
+.unit-card { display: flex; gap: 16px; }
+.unit-marker { display: flex; flex-direction: column; align-items: center; width: 34px; flex-shrink: 0; }
+.um-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; flex-shrink: 0; }
+.um-done { background: var(--green); color: #1e1e2e; }
+.um-current { background: var(--accent); color: #1e1e2e; box-shadow: 0 0 0 4px rgba(137,180,250,.25); }
+.um-locked { background: var(--surface); color: var(--muted); border: 1px solid var(--border); }
+.um-line { flex: 1; width: 2px; background: var(--border); margin: 4px 0; min-height: 24px; }
+
+.unit-body { flex: 1; padding-bottom: 18px; }
+.unit-link { display: block; width: 100%; text-align: left; position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; text-decoration: none; color: var(--text); transition: border-color .15s, transform .15s; font: inherit; cursor: pointer; }
+a.unit-link:hover { border-color: var(--accent); transform: translateY(-2px); }
+.unit-current .unit-link { border-color: var(--accent); }
+.unit-link-locked { opacity: .65; }
+.unit-link-locked:hover { opacity: .85; border-color: var(--muted); }
+.ucb h3 { color: var(--accent); margin: 6px 0 6px; font-size: 16px; }
+.unit-locked .ucb h3 { color: var(--muted); }
+.ucb p { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 8px; }
+.ucb-lock { font-size: 12px; }
+.ucb-exercises { font-size: 11px; color: var(--muted); border: 1px solid var(--border); border-radius: 10px; padding: 1px 8px; }
+.unit-done .ucb-exercises { color: var(--green); border-color: var(--green); }
+
+.unit-skip-confirm { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 13px; color: var(--text); }
+
+/* ── Learn: lesson footer / completion ───────────────────────────────────── */
+.lesson-complete-badge { font-size: 12px; color: var(--green); border: 1px solid var(--green); border-radius: 10px; padding: 2px 10px; margin-left: 10px; vertical-align: middle; }
+.lesson-footer { display: flex; align-items: center; gap: 16px; margin-top: 36px; padding-top: 18px; border-top: 1px solid var(--border); }
+.lesson-next { margin-left: auto; color: var(--accent); text-decoration: none; font-weight: 600; }
+.lesson-next:hover { text-decoration: underline; }
+.lesson-next-done { margin-left: auto; color: var(--green); }
+
+/* ── Learn: practice section ─────────────────────────────────────────────── */
+.practice-section, .quiz-section { margin-top: 40px; }
+.practice-section h2, .quiz-section h2 { color: var(--accent); font-size: 20px; border-bottom: 1px solid var(--border); padding-bottom: 6px; margin-bottom: 10px; }
+.ps-intro { color: var(--muted); font-size: 13.5px; line-height: 1.6; margin-bottom: 14px; }
+.ps-progressline { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+.ps-done { color: var(--green); font-size: 15px; font-weight: 600; margin-top: 18px; }
+
+.practice-problem { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin: 10px 0; overflow: hidden; }
+.practice-problem.pp-solved { border-color: rgba(166,227,161,.5); }
+.pp-header { display: flex; align-items: flex-start; gap: 10px; width: 100%; text-align: left; background: none; border: none; color: var(--text); font: inherit; font-size: 13.5px; padding: 10px 12px; cursor: pointer; }
+.pp-header:hover { background: rgba(137,180,250,.06); }
+.pp-status { flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; background: var(--bg); border: 1px solid var(--border); color: var(--muted); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; }
+.pp-solved .pp-status { background: var(--green); color: #1e1e2e; border-color: var(--green); }
+.pp-prompt { flex: 1; line-height: 1.5; }
+.pp-prompt code { font-family: var(--mono); background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; font-size: 12px; color: var(--yellow); }
+.pp-chevron { color: var(--muted); flex-shrink: 0; }
+.pp-body { border-top: 1px solid var(--border); }
+.pp-hint { padding: 8px 12px; font-size: 13px; color: var(--yellow); background: rgba(249,226,175,.07); border-bottom: 1px solid var(--border); }
+.pp-hint code { font-family: var(--mono); font-size: 12px; }
+.pp-solution { margin: 0; padding: 10px 12px; background: var(--bg); border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 12.5px; color: var(--text); overflow-x: auto; white-space: pre-wrap; }
+.pp-feedback { padding: 8px 12px; font-size: 13px; border-top: 1px solid var(--border); }
+.pp-ok { color: var(--green); }
+.pp-bad { color: var(--red); }
+.btn-check { background: var(--green); color: #1e1e2e; border: none; border-radius: 4px; padding: 4px 12px; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.btn-check:hover:not(:disabled) { filter: brightness(1.1); }
+.btn-check:disabled { opacity: .45; cursor: default; }
+
+/* ── Learn: quiz ─────────────────────────────────────────────────────────── */
+.quiz-best { font-size: 12.5px; color: var(--muted); margin-bottom: 14px; }
+.quiz-question { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; margin: 10px 0; }
+.quiz-question.qq-right { border-color: rgba(166,227,161,.6); }
+.quiz-question.qq-wrong { border-color: rgba(243,139,168,.6); }
+.qq-text { font-size: 14px; line-height: 1.55; margin-bottom: 10px; }
+.qq-text code, .qq-choices code, .qq-explain code { font-family: var(--mono); background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; font-size: 12px; color: var(--yellow); }
+.qq-num { color: var(--muted); font-weight: 700; margin-right: 4px; }
+.qq-choices { display: flex; flex-direction: column; gap: 6px; }
+.qq-choice { display: flex; align-items: baseline; gap: 8px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; cursor: pointer; line-height: 1.5; }
+.qq-choice:hover { border-color: var(--accent); }
+.qq-choice input { accent-color: var(--accent); }
+.qq-selected { border-color: var(--accent); background: rgba(137,180,250,.08); }
+.qq-correct { border-color: var(--green); background: rgba(166,227,161,.08); }
+.qq-incorrect { border-color: var(--red); background: rgba(243,139,168,.08); }
+.qq-explain { margin-top: 10px; padding: 8px 10px; font-size: 12.5px; color: var(--muted); background: var(--bg); border-radius: 4px; line-height: 1.55; }
+.quiz-footer { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin: 18px 0 40px; }
+.quiz-submit { padding: 8px 18px; font-size: 14px; }
+.quiz-score { font-size: 14px; }
+.qs-pass { color: var(--green); }
+.qs-fail { color: var(--yellow); }
+
+/* ── Learn: inline schema peek ───────────────────────────────────────────── */
+.schema-peek { padding: 8px 12px; border-bottom: 1px solid var(--border); background: rgba(137,180,250,.05); font-size: 12.5px; }
+.sp-empty { color: var(--muted); }
+.sp-table { display: flex; align-items: baseline; gap: 10px; padding: 3px 0; flex-wrap: wrap; }
+.sp-table-name { font-family: var(--mono); font-weight: 700; color: var(--accent); white-space: nowrap; }
+.sp-cols { display: flex; flex-wrap: wrap; gap: 6px; }
+.sp-col { font-family: var(--mono); font-size: 11.5px; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; white-space: nowrap; }
+.sp-key { font-size: 10px; margin-right: 2px; }
+.sp-type { color: var(--muted); font-size: 10px; }

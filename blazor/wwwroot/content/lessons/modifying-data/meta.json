@@ -1,0 +1,9 @@
+{
+  "id": "modifying-data",
+  "title": "Insert, Update & Delete",
+  "description": "Change data, not just read it: add rows with INSERT, fix them with UPDATE, and remove them with DELETE — safely.",
+  "database": "library",
+  "order": 5,
+  "kind": "lesson",
+  "exerciseCount": 26
+}

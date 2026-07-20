@@ -3,6 +3,7 @@
 @inject ContentService Content
 @inject SampleDatabaseService SampleSvc
 @inject SqliteConnectionService ConnSvc
+@inject ProgressService Progress
 
 <PageTitle>@(_lesson?.Meta.Title ?? "Lesson") — SQL Visualizer</PageTitle>
 
@@ -19,26 +20,61 @@
     {
         <div class="lesson-topline">
             <a class="lesson-back" href="learn">← All lessons</a>
-            <div class="lesson-db">
-                <span>Database:</span>
-                <strong>@ConnSvc.Status.DisplayName</strong>
-                @if (_dbError == null)
-                {
-                    <span class="db-ok">loaded</span>
-                }
-                else
-                {
-                    <span class="db-err">@_dbError</span>
-                }
-                <button class="btn-secondary db-reset" @onclick="ResetDatabase" title="Re-seed the database">↺ Reset</button>
-            </div>
+            @if (_lesson.Meta.Database.Length > 0)
+            {
+                <div class="lesson-db">
+                    <span>Database:</span>
+                    <strong>@ConnSvc.Status.DisplayName</strong>
+                    @if (_dbError == null)
+                    {
+                        <span class="db-ok">loaded</span>
+                    }
+                    else
+                    {
+                        <span class="db-err">@_dbError</span>
+                    }
+                    <button class="btn-secondary db-reset" @onclick="ResetDatabase" title="Re-seed the database">↺ Reset</button>
+                </div>
+            }
         </div>
 
-        <h1 class="lesson-title">@_lesson.Meta.Title</h1>
+        <h1 class="lesson-title">
+            @_lesson.Meta.Title
+            @if (_complete) { <span class="lesson-complete-badge">✓ Completed</span> }
+        </h1>
 
         <article class="lesson-body">
             <LessonContent Content="@_lesson.Content" />
         </article>
+
+        @if (_practice != null && _practice.Problems.Count > 0)
+        {
+            <PracticeSection LessonId="@_lesson.Meta.Id" DatabaseId="@_lesson.Meta.Database"
+                             Problems="_practice.Problems" OnAllSolved="Refresh" />
+        }
+
+        @if (_quiz != null && _quiz.Questions.Count > 0)
+        {
+            <QuizEngine LessonId="@_lesson.Meta.Id" Quiz="_quiz" OnPassed="Refresh" />
+        }
+
+        <div class="lesson-footer">
+            @if (!_complete)
+            {
+                <button class="btn-secondary" @onclick="MarkComplete"
+                        title="Mark this lesson complete without finishing every exercise">
+                    Mark lesson complete
+                </button>
+            }
+            @if (_next != null)
+            {
+                <a class="lesson-next" href="learn/@_next.Id">Next: @_next.Title →</a>
+            }
+            else if (_complete)
+            {
+                <span class="lesson-next-done">You've reached the end of the course. 🎓</span>
+            }
+        </div>
     }
 </div>
 
@@ -46,17 +82,32 @@
     [Parameter] public string Id { get; set; } = "";
 
     private Lesson? _lesson;
+    private PracticeSet? _practice;
+    private Quiz? _quiz;
+    private LessonMeta? _next;
     private bool _loading = true;
+    private bool _complete;
     private string? _dbError;
 
     protected override async Task OnParametersSetAsync()
     {
         _loading = true;
-        _lesson = null;
+        _lesson = null; _practice = null; _quiz = null; _next = null;
         _dbError = null;
         try
         {
+            await Progress.EnsureLoadedAsync();
             _lesson = await Content.LoadLessonAsync(Id);
+            _practice = await Content.LoadPracticeAsync(Id);
+            if (_lesson.Meta.Kind == "quiz")
+                _quiz = await Content.LoadQuizAsync(Id);
+            _complete = Progress.IsLessonComplete(Id);
+
+            var manifest = await Content.LoadManifestAsync();
+            var ordered = manifest.Lessons.OrderBy(l => l.Order).ToList();
+            var idx = ordered.FindIndex(l => l.Id == Id);
+            _next = idx >= 0 && idx < ordered.Count - 1 ? ordered[idx + 1] : null;
+
             EnsureDatabase(_lesson.Meta.Database);
         }
         catch (Exception ex) { _dbError = ex.Message; }
@@ -79,9 +130,22 @@
 
     private void ResetDatabase()
     {
-        if (_lesson == null) return;
+        if (_lesson == null || _lesson.Meta.Database.Length == 0) return;
         _dbError = null;
         try { SampleSvc.OpenSample(_lesson.Meta.Database); }
         catch (Exception ex) { _dbError = ex.Message; }
+    }
+
+    private async Task MarkComplete()
+    {
+        if (_lesson == null) return;
+        await Progress.MarkLessonCompleteAsync(_lesson.Meta.Id);
+        _complete = true;
+    }
+
+    private void Refresh()
+    {
+        _complete = _lesson != null && Progress.IsLessonComplete(_lesson.Meta.Id);
+        StateHasChanged();
     }
 }
