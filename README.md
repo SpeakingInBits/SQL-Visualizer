@@ -1,173 +1,105 @@
 # SQL Visualizer
 
-An interactive web app for teaching SQL. Open a SQLite database directly in your browser, write queries, and watch **sorting**, **filtering**, and **joins** animate step by step — no server required.
+**Learn SQL by watching it run.** SQL Visualizer is a free, browser-based app for students and teachers. Write a query, press Run, and watch **filtering**, **sorting**, and **joins** play out row by row on an animated canvas.
 
-Built with [Blazor WebAssembly](https://learn.microsoft.com/en-us/aspnet/core/blazor/), runs entirely in the browser as a static site.
+**Try it now:** [speakinginbits.github.io/SQL-Visualizer](https://speakinginbits.github.io/SQL-Visualizer/)
 
----
-
-## Features
-
-- **Connection manager** — open any SQLite `.db` file via the file picker, or load a built-in sample database
-- **Schema browser** — tree view of tables → columns with PK / FK indicators
-- **Query editor** — Monaco (VS Code) editor with SQL syntax highlighting; `Ctrl+Enter` to run
-- **Run** any statement — SELECT, INSERT, UPDATE, DELETE; DML shows rows-affected feedback
-- **Visualize** SELECT queries in a zoomable, pannable **node-graph canvas** (opens in a full-screen modal):
-  - **Simple query** — a row-by-row table scan
-  - `LIMIT` — rows beyond the limit are visibly cut
-  - `ORDER BY` — input rows flow into their sorted positions, one connector at a time
-  - `WHERE` — rows are scanned, each AND condition evaluated on its own card (TRUE/FALSE), matches collected into an output table
-  - `WHERE + ORDER BY` — filter stage followed by a sort stage
-  - `JOIN` — one or **multiple** joins laid out left-to-right, connectors between matched rows, then the merged result
-- **Navigable space** — scroll to zoom, drag to pan, plus zoom / fit buttons; playback controls (Prev / Next / Play / Reset / Speed) stay as a fixed 2D toolbar for teacher-led demos
-- **Script library** — upload `.sql` files, save them to browser storage, and re-run on demand
-- **First-run walkthrough** — a skippable spotlight tour of the Playground (connect, schema, run, visualize, scripts) that ends by pointing SQL newcomers to the **Learn** tab; completion or skip is remembered in browser storage, and it can be replayed from the **? Tour** button in the sidebar
+Nothing to install and no account needed. The whole app, including the SQLite engine, runs inside your browser as a static site built with [Blazor WebAssembly](https://learn.microsoft.com/en-us/aspnet/core/blazor/).
 
 ---
 
-## Prerequisites
+## Two ways to use it
+
+### Learn
+
+A guided course of seven units, each with a short reading, live query cells you can edit and run, and graded practice problems. Your progress is saved in your browser.
+
+| # | Unit | Practice database |
+|---|---|---|
+| 1 | Select Queries | `movies.db` |
+| 2 | Joins & Set Operators | `school.db` |
+| 3 | Summary Queries | `sales.db` |
+| 4 | Subqueries | `company.db` |
+| 5 | Insert, Update & Delete | `library.db` |
+| 6 | DDL: Creating Tables & Schemas | `sandbox.db` |
+| 7 | Database Design Fundamentals | Knowledge check (quiz) |
+
+Every practice problem has a hint, a reveal-solution button, a schema peek, and a **Visualize** button so you can see what your query actually did.
+
+### Playground
+
+A free-form workspace for experimenting, demos, and homework.
+
+- **Connection manager** — pick a built-in sample database or open any SQLite `.db` file from your computer
+- **Schema browser** — tree view of tables and columns with primary-key and foreign-key markers
+- **Query editor** — Monaco (the VS Code editor) with SQL highlighting; `Ctrl+Enter` runs the query
+- **Run anything** — SELECT, INSERT, UPDATE, DELETE, and CREATE all work; changes show a rows-affected count
+- **Visualize** — animate any SELECT in a zoomable, pannable node-graph:
+  - table scans and `LIMIT` cut-offs
+  - `WHERE` with each condition evaluated on its own card
+  - `ORDER BY` with rows flowing into their sorted positions
+  - single and multi-table `JOIN`s with connectors between matched rows
+  - playback controls (Prev / Next / Play / Reset / Speed) for teacher-led walkthroughs
+- **Script library** — upload `.sql` files, keep them in browser storage, and re-run them later
+- **Guided tour** — a skippable first-run walkthrough, replayable any time from the **? Tour** button
+
+---
+
+## Sample databases
+
+All sample databases are built in memory when you pick them. Nothing is downloaded and nothing you change is permanent, so feel free to break things.
+
+| Database | What's inside | Good for |
+|---|---|---|
+| `movies.db` | A film catalog | SELECT, WHERE, ORDER BY, LIMIT |
+| `school.db` | Students, courses, enrollments, alumni | Joins and set operators |
+| `store.db` | Categories, products, orders | Multi-condition filters and joins |
+| `sales.db` | Customers, orders, order items | Aggregates, GROUP BY, HAVING |
+| `company.db` | Employees, departments, projects | Subqueries |
+| `library.db` | Books, members, loans | INSERT, UPDATE, DELETE |
+| `sandbox.db` | Empty | CREATE TABLE and other DDL |
+
+---
+
+## For teachers
+
+- **Project it.** The visualizer opens full-screen with step-by-step playback controls, so it works well on a classroom display.
+- **Bring your own data.** Any SQLite file opens directly in the browser, so you can hand students a `.db` that matches your course.
+- **No setup for students.** Share the link above. It works on school laptops and Chromebooks without an install.
+
+---
+
+## Run it locally
+
+You only need this if you want to change the code. Otherwise, use the hosted link above.
+
+### Prerequisites
 
 | Requirement | Notes |
 |---|---|
 | [.NET 10 SDK](https://dotnet.microsoft.com/download) | Preview or later |
 | `wasm-tools` workload | Run `dotnet workload install wasm-tools` once after installing the SDK |
 
-No Node.js, Python, or database server required.
+No Node.js, Python, or database server is required.
 
----
-
-## Quick start
+### Start the app
 
 ```bash
 cd blazor
 dotnet run
 ```
 
-Then open [http://localhost:5000](http://localhost:5000) in your browser.
+Then open [http://localhost:5229](http://localhost:5229). The port comes from `blazor/Properties/launchSettings.json`.
 
----
-
-## Deploy as a static site
+### Build a static release
 
 ```bash
 cd blazor
 dotnet publish -c Release -o publish
 ```
 
-Copy the contents of `publish/wwwroot/` to any static host (GitHub Pages, Netlify, Azure Static Web Apps, etc.). No server-side component is needed.
+Copy the contents of `publish/wwwroot/` to any static host. There is no server-side component.
+
+The hosted copy is published automatically to GitHub Pages by the workflow in `.github/workflows/deploy.yml` on every push to `main`.
 
 ---
-
-## Project structure
-
-```
-SQL-Visualizer/
-└── blazor/
-    ├── SqlVisualizer.csproj
-    ├── Program.cs                    # DI registration + WASM host setup
-    ├── _Imports.razor                # Global using directives
-    ├── App.razor / Layout/           # Root component and shell layout
-    ├── Models/
-    │   └── Models.cs                 # Shared C# record types (results, schema, scripts)
-    ├── Services/
-    │   ├── SqliteConnectionService.cs   # Open SQLite from file bytes or in-memory
-    │   ├── SampleDatabaseService.cs     # Seeds school.db and store.db in-memory
-    │   ├── SchemaService.cs             # PRAGMA-based table/column introspection
-    │   ├── QueryExecutorService.cs      # RunStatement + VisualizeQuery (all viz types)
-    │   ├── ScriptRunnerService.cs       # Multi-statement script execution
-    │   └── ScriptStoreService.cs        # Script persistence via browser localStorage
-    ├── Components/
-    │   ├── ConnectionPanel.razor
-    │   ├── SchemaBrowser.razor
-    │   ├── QueryEditor.razor
-    │   ├── ScriptLibrary.razor
-    │   └── Visualizer/
-    │       ├── Visualizer.razor          # Dispatches to the correct sub-visualizer
-    │       ├── SortVisualizer.razor      # ORDER BY step animation
-    │       ├── FilterVisualizer.razor    # WHERE scan + optional ORDER BY sort
-    │       └── JoinVisualizer.razor      # JOIN with SVG connector lines
-    ├── Pages/
-    │   └── Home.razor                # Single-page shell
-    └── wwwroot/
-        ├── index.html
-        ├── css/app.css
-        └── js/sqlvis.js              # JS interop helpers (file picker, localStorage)
-```
-
----
-
-## Sample databases
-
-Two in-memory sample databases are included and require no external files:
-
-| Name | Tables | Good for |
-|---|---|---|
-| `school.db` | `students`, `courses`, `enrollments` | ORDER BY, WHERE, INNER JOIN demos |
-| `store.db` | `categories`, `products`, `orders` | Aggregates, JOINs, multi-condition WHERE |
-
-Select either from the connection panel — no file picker needed.
-
-
-The app starts the server on port 8000 and automatically opens your default browser.
-
-> **Note:** The executable is platform-specific. Build on each OS separately (or use CI) to produce Windows, macOS, and Linux binaries.
-
----
-
-## Project structure
-
-```
-SQL-Visualizer/
-├── backend/
-│   ├── main.py               # FastAPI entry point + static file serving
-│   ├── db/
-│   │   ├── connector.py      # SQL Server + SQLite connection manager
-│   │   ├── executor.py       # Query execution + animation step extraction
-│   │   ├── schema.py         # Schema introspection (databases, tables, columns, FKs)
-│   │   └── script_store.py   # .sql script persistence (app_data/scripts.json)
-│   ├── routes/
-│   │   ├── connection.py     # POST /connect/*, DELETE /disconnect, GET /status
-│   │   ├── schema.py         # GET /databases, /tables, /columns
-│   │   ├── query.py          # POST /query/run, /query/visualize
-│   │   └── scripts.py        # GET|POST|DELETE /scripts, POST /scripts/{id}/run
-│   ├── app_data/             # Created at runtime — stores saved .sql scripts
-│   └── requirements.txt
-├── frontend/
-│   └── src/
-│       ├── api/client.ts         # Typed API wrappers (axios)
-│       ├── types.ts              # Shared TypeScript types
-│       ├── App.tsx               # Two-panel shell layout
-│       └── components/
-│           ├── ConnectionPanel/  # Connection form
-│           ├── SchemaBrowser/    # Schema tree
-│           ├── QueryEditor/      # Monaco editor + results
-│           ├── ScriptLibrary/    # Script upload / run / delete
-│           └── Visualizer/
-│               ├── SortVisualizer.tsx    # ORDER BY animation
-│               ├── FilterVisualizer.tsx  # WHERE animation
-│               └── JoinVisualizer.tsx    # JOIN animation (D3 SVG)
-├── build.py                  # Build + package script
-└── README.md
-```
-
----
-
-## API reference
-
-| Method | Endpoint | Description |
-|---|---|---|
-| `POST` | `/api/connect/sqlserver` | Connect to SQL Server |
-| `POST` | `/api/connect/sqlite` | Connect to a SQLite file |
-| `DELETE` | `/api/disconnect` | Close active connection |
-| `GET` | `/api/status` | Connection status |
-| `GET` | `/api/databases` | List databases |
-| `GET` | `/api/tables?database=` | List tables |
-| `GET` | `/api/columns?table=&schema=` | List columns + foreign keys |
-| `POST` | `/api/query/run` | Execute any SQL statement |
-| `POST` | `/api/query/visualize` | Execute SELECT + return animation step data |
-| `GET` | `/api/scripts` | List saved scripts |
-| `POST` | `/api/scripts/upload` | Upload a `.sql` file |
-| `POST` | `/api/scripts/{id}/run` | Run a saved script |
-| `DELETE` | `/api/scripts/{id}` | Delete a saved script |
-
-Interactive API docs are available at [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs) when running in dev mode.
