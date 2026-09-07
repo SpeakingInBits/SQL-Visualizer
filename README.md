@@ -21,6 +21,7 @@ Built with [Blazor WebAssembly](https://learn.microsoft.com/en-us/aspnet/core/bl
   - `JOIN` — one or **multiple** joins laid out left-to-right, connectors between matched rows, then the merged result
 - **Navigable space** — scroll to zoom, drag to pan, plus zoom / fit buttons; playback controls (Prev / Next / Play / Reset / Speed) stay as a fixed 2D toolbar for teacher-led demos
 - **Script library** — upload `.sql` files, save them to browser storage, and re-run on demand
+- **First-run walkthrough** — a skippable spotlight tour of the Playground (connect, schema, run, visualize, scripts) that ends by pointing SQL newcomers to the **Learn** tab; completion or skip is remembered in browser storage, and it can be replayed from the **? Tour** button in the sidebar
 
 ---
 

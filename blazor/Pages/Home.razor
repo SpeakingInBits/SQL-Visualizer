@@ -1,13 +1,17 @@
-﻿@page "/"
+@page "/"
 @inject SqliteConnectionService ConnSvc
+@inject OnboardingService Onboarding
 
 <PageTitle>SQL Visualizer</PageTitle>
 
 <div class="app-layout">
     <aside class="sidebar">
-        <div class="sidebar-brand">SQL Visualizer</div>
+        <div class="sidebar-brand">
+            <span>SQL Visualizer</span>
+            <button class="btn-tour" @onclick="StartTour" title="Replay the walkthrough">? Tour</button>
+        </div>
 
-        <ConnectionPanel OnConnectionChanged="OnConnectionChanged" />
+        <ConnectionPanel Connected="_connected" OnConnectionChanged="OnConnectionChanged" />
 
         <div class="sidebar-tabs">
             <button class="stab @(_sideTab == "schema" ? "active" : "")"
@@ -31,9 +35,44 @@
     </main>
 </div>
 
+@if (_showTour)
+{
+    <OnboardingTour Connected="_connected"
+                    OnConnectionChanged="OnConnectionChanged"
+                    OnClosed="CloseTour" />
+}
+
 @code {
     private string _sideTab = "schema";
     private bool _connected;
+    private bool _showTour;
+
+    protected override void OnInitialized()
+    {
+        // The connection service is a singleton, so a connection opened earlier
+        // (e.g. before visiting Learn) is still live when we come back.
+        _connected = ConnSvc.Status.Connected;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        // First visit: show the walkthrough unless it was completed or skipped before.
+        await Onboarding.EnsureLoadedAsync();
+        if (!Onboarding.HasSeen)
+        {
+            _showTour = true;
+            StateHasChanged();
+        }
+    }
+
+    private void StartTour()
+    {
+        _sideTab = "schema";
+        _showTour = true;
+    }
+
+    private void CloseTour() => _showTour = false;
 
     private void OnConnectionChanged()
     {

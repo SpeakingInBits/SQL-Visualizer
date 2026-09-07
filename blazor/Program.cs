@@ -17,6 +17,7 @@ builder.Services.AddSingleton<SqliteConnectionService>();
 builder.Services.AddScoped<ContentService>();
 // Scoped because it depends on IJSRuntime (scoped in WASM); same effective lifetime.
 builder.Services.AddScoped<ProgressService>();
+builder.Services.AddScoped<OnboardingService>();
 builder.Services.AddSingleton<SampleDatabaseService>();
 builder.Services.AddSingleton<SchemaService>();
 builder.Services.AddSingleton<QueryExecutorService>();

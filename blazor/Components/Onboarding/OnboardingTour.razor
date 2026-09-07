@@ -1,0 +1,320 @@
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+@inject OnboardingService Onboarding
+@inject SampleDatabaseService SampleSvc
+@inject SqliteConnectionService ConnSvc
+@implements IAsyncDisposable
+
+@* Spotlight walkthrough of the Playground. Rendered above the page; the four
+   backdrop pieces block clicks everywhere except inside the highlighted hole,
+   so the user can still interact with the feature being described. *@
+
+<div class="tour" role="dialog" aria-modal="true" aria-label="Playground walkthrough">
+    @if (_hole is { } h)
+    {
+        <div class="tour-shade" style="left:0;top:0;width:100vw;height:@(Px(h.Top))"></div>
+        <div class="tour-shade" style="left:0;top:@(Px(h.Bottom));width:100vw;height:@(Px(Math.Max(0, _vh - h.Bottom)))"></div>
+        <div class="tour-shade" style="left:0;top:@(Px(h.Top));width:@(Px(h.Left));height:@(Px(h.Height))"></div>
+        <div class="tour-shade" style="left:@(Px(h.Right));top:@(Px(h.Top));width:@(Px(Math.Max(0, _vw - h.Right)));height:@(Px(h.Height))"></div>
+        <div class="tour-ring" style="left:@(Px(h.Left));top:@(Px(h.Top));width:@(Px(h.Width));height:@(Px(h.Height))"></div>
+    }
+    else
+    {
+        <div class="tour-shade tour-shade-full"></div>
+    }
+
+    <div class="tour-card @(_hole == null ? "centered" : "")"
+         style="@_cardStyle"
+         tabindex="-1"
+         @ref="_card"
+         @onkeydown="OnKeyDown">
+        <div class="tour-card-head">
+            <span class="tour-step-count">Step @(_step + 1) of @Steps.Length</span>
+            <button class="tour-skip" @onclick="Skip" title="Skip the tour (Esc)">Skip tour ✕</button>
+        </div>
+
+        <h3 class="tour-title">@Current.Title</h3>
+        <div class="tour-body">@Current.Body</div>
+
+        <div class="tour-progress">
+            @for (var i = 0; i < Steps.Length; i++)
+            {
+                <span class="tour-dot @(i == _step ? "on" : i < _step ? "done" : "")"></span>
+            }
+        </div>
+
+        <div class="tour-actions">
+            @if (_step > 0)
+            {
+                <button class="btn-secondary" @onclick="Back">← Back</button>
+            }
+            <span class="tour-spacer"></span>
+
+            @if (IsLast)
+            {
+                <button class="btn-secondary" @onclick="Finish">Start exploring</button>
+                <button class="btn-primary" @onclick="GoToLearn">Go to Learn →</button>
+            }
+            else if (Current.Id == "connect" && !ConnSvc.Status.Connected)
+            {
+                <button class="btn-secondary" @onclick="Next">Skip step</button>
+                <button class="btn-primary" @onclick="OpenSampleAndContinue">Open school.db →</button>
+            }
+            else
+            {
+                <button class="btn-primary" @onclick="Next">@(_step == 0 ? "Start the tour →" : "Next →")</button>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    /// <summary>Whether the Playground currently has a database connection.</summary>
+    [Parameter] public bool Connected { get; set; }
+
+    /// <summary>Raised when the tour opens a sample database on the user's behalf.</summary>
+    [Parameter] public EventCallback OnConnectionChanged { get; set; }
+
+    /// <summary>Raised when the tour is finished or skipped and should be removed.</summary>
+    [Parameter] public EventCallback OnClosed { get; set; }
+
+    private sealed record Step(string Id, string? Selector, string Title, RenderFragment Body);
+
+    private static readonly RenderFragment Welcome = @<text>
+        <p>SQL Visualizer is a playground where you write SQL and <strong>watch it execute</strong> — row by row, join by join.</p>
+        <p>This quick tour takes about a minute and shows you how to connect a database, run a query, and open the animated view.</p>
+    </text>;
+
+    private static readonly RenderFragment ConnectBody = @<text>
+        <p>Every query needs a database. Use <strong>Browse…</strong> to open a SQLite file from your computer, or pick one of the built-in samples.</p>
+        <p>Not sure? Let us open <code>school.db</code> for you — a small students-and-courses database that is great for experimenting.</p>
+    </text>;
+
+    private static readonly RenderFragment SchemaBody = @<text>
+        <p>Once connected, the <strong>Schema</strong> panel lists every table in the database. Click a table to expand its columns and types.</p>
+        <p>Keep it open while you write queries — it saves a lot of guessing about column names.</p>
+    </text>;
+
+    private static readonly RenderFragment EditorBody = @<text>
+        <p>This is the <strong>query editor</strong>. Type any SQL here. It comes pre-filled with a simple <code>SELECT</code> so you can try things right away.</p>
+        <p>Tip: highlight part of a script to run only the selected text.</p>
+    </text>;
+
+    private static readonly RenderFragment RunBody = @<text>
+        <p>Press <strong>▶ Run</strong> (or <kbd>Ctrl</kbd>+<kbd>Enter</kbd>) to execute the query. Results appear in the table below the editor.</p>
+        <p>Go ahead and try it now — the button is live.</p>
+    </text>;
+
+    private static readonly RenderFragment VisualizeBody = @<text>
+        <p><strong>⚡ Visualize</strong> is the fun part. It opens a full-screen, step-by-step animation of how the database evaluates your query: scanning rows, matching joins, filtering and sorting.</p>
+        <p>You can play, pause, and step through frames, and pan or zoom the canvas.</p>
+    </text>;
+
+    private static readonly RenderFragment ScriptsBody = @<text>
+        <p>Switch to the <strong>Scripts</strong> tab to upload <code>.sql</code> files and keep them handy. Scripts are stored in your browser and can be run in full against the current connection.</p>
+    </text>;
+
+    private static readonly RenderFragment FinishBody = @<text>
+        <p>That's it — you're ready to explore.</p>
+        <p><strong>New to SQL?</strong> The <strong>Learn</strong> tab has short lessons with interactive examples and practice problems, from <code>SELECT</code> basics through joins and subqueries. It's the best place to start if the editor feels unfamiliar.</p>
+        <p class="tour-fine">You can replay this tour any time from the <em>Tour</em> button in the sidebar.</p>
+    </text>;
+
+    private static readonly Step[] Steps =
+    [
+        new("welcome",   null,                "Welcome to SQL Visualizer 👋", Welcome),
+        new("connect",   ".connection-panel", "1. Connect to a database",     ConnectBody),
+        new("schema",    ".schema-browser",   "2. Browse the schema",         SchemaBody),
+        new("editor",    ".monaco-wrapper",   "3. Write a query",             EditorBody),
+        new("run",       ".btn-run",          "4. Run it",                    RunBody),
+        new("visualize", ".btn-visualize",    "5. Visualize it",              VisualizeBody),
+        new("scripts",   ".sidebar-tabs",     "6. Save scripts",              ScriptsBody),
+        new("finish",    null,                "You're all set 🎉",            FinishBody),
+    ];
+
+    private int _step;
+    private Step Current => Steps[_step];
+    private bool IsLast => _step == Steps.Length - 1;
+
+    private sealed record Rect(double Left, double Top, double Width, double Height)
+    {
+        public double Right  => Left + Width;
+        public double Bottom => Top + Height;
+    }
+
+    private sealed class Measure
+    {
+        public double Left { get; set; }
+        public double Top { get; set; }
+        public double Width { get; set; }
+        public double Height { get; set; }
+        public double Vw { get; set; }
+        public double Vh { get; set; }
+    }
+
+    private const double HolePad = 6;
+    private const double CardW   = 380;
+    private const double CardH   = 260;   // estimate used only for placement
+    private const double Gap     = 16;
+    private const double Margin  = 12;
+
+    private Rect? _hole;
+    private double _vw = 1200, _vh = 800;
+    private string _cardStyle = "";
+    private bool _needsMeasure = true;
+    private bool _wasConnected;
+    private ElementReference _card;
+    private DotNetObjectReference<OnboardingTour>? _selfRef;
+
+    private static string Px(double v) => v.ToString("0", System.Globalization.CultureInfo.InvariantCulture) + "px";
+
+    protected override void OnParametersSet()
+    {
+        // Auto-advance past the connect step as soon as a connection appears.
+        if (Connected && !_wasConnected && Current.Id == "connect")
+            _step++;
+        if (Connected != _wasConnected)
+            _needsMeasure = true;
+        _wasConnected = Connected;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _selfRef = DotNetObjectReference.Create(this);
+            try { await JS.InvokeVoidAsync("SqlVis.watchResize", _selfRef); } catch { }
+        }
+
+        if (_needsMeasure)
+        {
+            _needsMeasure = false;
+            await MeasureAsync();
+            StateHasChanged();
+            try { await JS.InvokeVoidAsync("SqlVis.focusElement", _card); } catch { }
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnViewportChanged()
+    {
+        await MeasureAsync();
+        StateHasChanged();
+    }
+
+    private async Task MeasureAsync()
+    {
+        Measure? m = null;
+        try { m = await JS.InvokeAsync<Measure?>("SqlVis.measureTarget", Current.Selector); }
+        catch { }
+
+        if (m != null) { _vw = m.Vw; _vh = m.Vh; }
+
+        if (Current.Selector == null || m == null || m.Width <= 0 || m.Height <= 0)
+        {
+            _hole = null;
+            _cardStyle = "";
+            return;
+        }
+
+        _hole = new Rect(
+            Math.Max(0, m.Left - HolePad),
+            Math.Max(0, m.Top - HolePad),
+            m.Width + HolePad * 2,
+            m.Height + HolePad * 2);
+
+        _cardStyle = PlaceCard(_hole);
+    }
+
+    /// <summary>Pick a spot for the card: right of the hole, else below, else above, else centered.</summary>
+    private string PlaceCard(Rect h)
+    {
+        static double Clamp(double v, double min, double max) => Math.Max(min, Math.Min(v, max));
+
+        if (h.Right + Gap + CardW + Margin <= _vw)
+        {
+            var top = Clamp(h.Top, Margin, Math.Max(Margin, _vh - CardH - Margin));
+            return $"left:{Px(h.Right + Gap)};top:{Px(top)};width:{Px(CardW)}";
+        }
+        if (h.Bottom + Gap + CardH + Margin <= _vh)
+        {
+            var left = Clamp(h.Left, Margin, Math.Max(Margin, _vw - CardW - Margin));
+            return $"left:{Px(left)};top:{Px(h.Bottom + Gap)};width:{Px(CardW)}";
+        }
+        if (h.Top - Gap - CardH >= Margin)
+        {
+            var left = Clamp(h.Left, Margin, Math.Max(Margin, _vw - CardW - Margin));
+            return $"left:{Px(left)};top:{Px(h.Top - Gap - CardH)};width:{Px(CardW)}";
+        }
+        return "";
+    }
+
+    private void Go(int step)
+    {
+        _step = Math.Clamp(step, 0, Steps.Length - 1);
+        _needsMeasure = true;
+    }
+
+    private void Next() => Go(_step + 1);
+    private void Back() => Go(_step - 1);
+
+    private async Task OpenSampleAndContinue()
+    {
+        try
+        {
+            SampleSvc.OpenSample("school");
+            await OnConnectionChanged.InvokeAsync();
+        }
+        catch { /* the connection panel surfaces its own errors; just move on */ }
+
+        // OnParametersSet advances when Connected flips; if the parent didn't
+        // re-render for some reason, advance explicitly.
+        if (Current.Id == "connect") Next();
+    }
+
+    private async Task Skip()
+    {
+        await Onboarding.MarkSkippedAsync(_step);
+        await Close();
+    }
+
+    private async Task Finish()
+    {
+        await Onboarding.MarkCompletedAsync(_step);
+        await Close();
+    }
+
+    private async Task GoToLearn()
+    {
+        await Onboarding.MarkCompletedAsync(_step);
+        await Close();
+        Nav.NavigateTo("learn");
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case "Escape":     await Skip(); break;
+            case "ArrowRight": if (!IsLast) Next(); break;
+            case "ArrowLeft":  Back(); break;
+            case "Enter":
+                if (IsLast) await Finish();
+                else if (Current.Id != "connect" || Connected) Next();
+                break;
+        }
+    }
+
+    private async Task Close()
+    {
+        try { await JS.InvokeVoidAsync("SqlVis.unwatchResize"); } catch { }
+        await OnClosed.InvokeAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try { await JS.InvokeVoidAsync("SqlVis.unwatchResize"); } catch { }
+        _selfRef?.Dispose();
+    }
+}

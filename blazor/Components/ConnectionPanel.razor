@@ -61,7 +61,21 @@
 @code {
     [Parameter] public EventCallback OnConnectionChanged { get; set; }
 
+    /// <summary>
+    /// Mirrors the parent's connection state so the panel re-renders when a
+    /// connection is opened elsewhere (e.g. by the onboarding tour).
+    /// </summary>
+    [Parameter] public bool Connected { get; set; }
+
     private bool Collapsed { get; set; } = false;
+    private bool _wasConnected;
+
+    protected override void OnParametersSet()
+    {
+        // Tuck the form away once a connection appears, just like OpenSample does.
+        if (Connected && !_wasConnected) Collapsed = true;
+        _wasConnected = Connected;
+    }
     private string? _selectedFileName;
     private byte[]? _selectedBytes;
     private string? _error;
