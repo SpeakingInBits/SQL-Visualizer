@@ -51,5 +51,34 @@ window.SqlVis = {
         if (!element) return null;
         const r = element.getBoundingClientRect();
         return { left: r.left, top: r.top, width: r.width, height: r.height };
+    },
+
+    /** Measure the first element matching a CSS selector for the onboarding tour.
+     *  Returns {left, top, width, height, vw, vh} or null if not found. */
+    measureTarget: function (selector) {
+        const vw = window.innerWidth, vh = window.innerHeight;
+        if (!selector) return { left: 0, top: 0, width: 0, height: 0, vw, vh };
+        const el = document.querySelector(selector);
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        return { left: r.left, top: r.top, width: r.width, height: r.height, vw, vh };
+    },
+
+    /** Notify a .NET object (via `OnViewportChanged`) whenever the window resizes. */
+    watchResize: function (dotnetRef) {
+        this.unwatchResize();
+        let timer = null;
+        this._resizeHandler = () => {
+            clearTimeout(timer);
+            timer = setTimeout(() => dotnetRef.invokeMethodAsync('OnViewportChanged'), 80);
+        };
+        window.addEventListener('resize', this._resizeHandler);
+    },
+
+    unwatchResize: function () {
+        if (this._resizeHandler) {
+            window.removeEventListener('resize', this._resizeHandler);
+            this._resizeHandler = null;
+        }
     }
 };
