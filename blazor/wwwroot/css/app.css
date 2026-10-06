@@ -38,8 +38,9 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
 .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
 
 /* ── Buttons ─────────────────────────────────────────────────────────────── */
-button { cursor: pointer; font-family: inherit; }
+button { cursor: pointer; font-family: inherit; touch-action: manipulation; } /* no double-tap zoom delay on touch */
 button:disabled { opacity: .45; cursor: not-allowed; }
+.btn-primary, .btn-secondary, .btn-run, .btn-visualize, .btn-check { white-space: nowrap; }
 .btn-primary    { background: var(--accent); color: #1e1e2e; border: none; border-radius: var(--radius); padding: 6px 14px; font-weight: 600; font-size: 13px; }
 .btn-primary:hover:not(:disabled) { filter: brightness(1.12); }
 .btn-secondary  { background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius); padding: 5px 12px; font-size: 13px; }
@@ -112,7 +113,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 /* ── Query Editor ────────────────────────────────────────────────────────── */
 .query-editor { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-.editor-toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--surface); }
+.editor-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--surface); }
 .loading-hint { color: var(--muted); font-size: 12px; }
 .query-error  { color: var(--red); font-size: 12px; }
 .monaco-wrapper { height: 220px; flex-shrink: 0; border-bottom: 1px solid var(--border); position: relative; overflow: hidden; }
@@ -226,6 +227,11 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 .viz-modal-body { position: relative; flex: 1; overflow: hidden; }
 .vm-hint { position: absolute; right: 12px; bottom: 10px; font-size: 11px; color: var(--muted); background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 3px 8px; pointer-events: none; }
+.vm-hint-touch { display: none; }
+@media (hover: none) and (pointer: coarse) {
+    .vm-hint-mouse { display: none; }
+    .vm-hint-touch { display: inline; }
+}
 
 /* ── Node canvas (pan / zoom) ────────────────────────────────────────────── */
 .node-canvas { position: absolute; inset: 0; overflow: hidden; background: var(--bg); cursor: grab; touch-action: none; }
@@ -282,10 +288,10 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 /* Lesson view */
 .lesson-view { max-width: 860px; margin: 0 auto; }
-.lesson-topline { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
-.lesson-back { color: var(--muted); text-decoration: none; font-size: 13px; }
+.lesson-topline { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
+.lesson-back { color: var(--muted); text-decoration: none; font-size: 13px; white-space: nowrap; }
 .lesson-back:hover { color: var(--accent); }
-.lesson-db { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.lesson-db { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 12px; color: var(--muted); }
 .lesson-db strong { color: var(--text); }
 .db-ok { color: var(--green); }
 .db-err { color: var(--red); }
@@ -311,7 +317,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 /* Interactive lesson cell (notebook node) */
 .lesson-cell { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin: 16px 0; overflow: hidden; }
-.lc-toolbar { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.lc-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; padding: 8px 10px; border-bottom: 1px solid var(--border); }
 .lc-hint { color: var(--muted); font-size: 12px; }
 .lc-error { color: var(--red); font-size: 12px; font-family: var(--mono); }
 .lc-editor { background: #1e1e1e; }
@@ -329,7 +335,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 
 /* ── Learn: course path (index page) ─────────────────────────────────────── */
-.course-progress { display: flex; align-items: center; gap: 12px; max-width: 720px; margin-bottom: 26px; }
+.course-progress { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; max-width: 720px; margin-bottom: 26px; }
 .course-reset { margin-left: auto; }
 .ps-bar { flex: 1; height: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 5px; overflow: hidden; }
 .ps-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--green)); transition: width .3s; }
@@ -361,7 +367,7 @@ a.unit-link:hover { border-color: var(--accent); transform: translateY(-2px); }
 
 /* ── Learn: lesson footer / completion ───────────────────────────────────── */
 .lesson-complete-badge { font-size: 12px; color: var(--green); border: 1px solid var(--green); border-radius: 10px; padding: 2px 10px; margin-left: 10px; vertical-align: middle; }
-.lesson-footer { display: flex; align-items: center; gap: 16px; margin-top: 36px; padding-top: 18px; border-top: 1px solid var(--border); }
+.lesson-footer { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; margin-top: 36px; padding-top: 18px; border-top: 1px solid var(--border); }
 .lesson-next { margin-left: auto; color: var(--accent); text-decoration: none; font-weight: 600; }
 .lesson-next:hover { text-decoration: underline; }
 .lesson-next-done { margin-left: auto; color: var(--green); }
@@ -448,6 +454,8 @@ a.unit-link:hover { border-color: var(--accent); transform: translateY(-2px); }
     background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
     box-shadow: 0 12px 40px rgba(0,0,0,.55); padding: 16px 18px 14px;
     display: flex; flex-direction: column; gap: 10px; outline: none; pointer-events: auto;
+    max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); /* never taller than the screen; */
+    overflow: hidden;                                                  /* the body scrolls, header + actions stay put */
     animation: tour-in .18s ease-out;
 }
 @keyframes tour-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; } }
@@ -458,7 +466,8 @@ a.unit-link:hover { border-color: var(--accent); transform: translateY(-2px); }
 .tour-skip { background: none; border: none; color: var(--muted); font-size: 12px; padding: 2px 4px; }
 .tour-skip:hover { color: var(--red); }
 .tour-title { font-size: 16px; font-weight: 700; color: var(--accent); }
-.tour-body { font-size: 13.5px; line-height: 1.55; display: flex; flex-direction: column; gap: 8px; }
+.tour-body { font-size: 13.5px; line-height: 1.55; display: flex; flex-direction: column; gap: 8px; flex: 0 1 auto; min-height: 0; overflow-y: auto; }
+.tour-card-head, .tour-title, .tour-progress, .tour-actions { flex: none; }
 .tour-body code { font-family: var(--mono); background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; font-size: 12px; color: var(--yellow); }
 .tour-body kbd { font-family: var(--mono); background: var(--bg); border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; font-size: 11.5px; }
 .tour-fine { font-size: 12px; color: var(--muted); }
@@ -466,5 +475,49 @@ a.unit-link:hover { border-color: var(--accent); transform: translateY(-2px); }
 .tour-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border); transition: background .15s; }
 .tour-dot.on { background: var(--accent); }
 .tour-dot.done { background: rgba(137,180,250,.45); }
-.tour-actions { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+.tour-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
 .tour-spacer { flex: 1; }
+
+
+/* ── Small screens ───────────────────────────────────────────────────────── */
+/* Phones and narrow tablets: stack the Playground sidebar above the editor and
+   let the page scroll, instead of squeezing the editor into a sliver. */
+@media (max-width: 768px) {
+    .app-layout { flex-direction: column; overflow-x: hidden; overflow-y: auto; }
+    .sidebar { width: 100%; min-width: 0; flex: none; overflow: visible; border-right: none; border-bottom: 1px solid var(--border); }
+    .sample-buttons { flex-direction: row; flex-wrap: wrap; }
+    .btn-sample { flex: 1 1 150px; }
+    .schema-browser, .script-library { flex: none; max-height: 40vh; }
+    .main-content { flex: none; min-height: calc(100vh - 44px); min-height: calc(100dvh - 44px); overflow: visible; }
+    .monaco-wrapper { height: 180px; }
+    .results-area { min-height: 240px; }
+    .results-table-wrap { max-height: 60vh; max-height: 60dvh; }
+}
+
+@media (max-width: 640px) {
+    /* Visualizer takes the whole screen */
+    .viz-modal { width: 100vw; height: 100vh; height: 100dvh; border: none; border-radius: 0; }
+    .viz-modal-header { padding: 8px 12px; gap: 10px; }
+    .vm-titles { flex: 1; min-width: 0; }
+    .vm-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .viz-modal-toolbar { gap: 8px 12px; padding: 6px 10px; }
+    .vm-speed input[type=range] { width: 90px; }
+    .vm-phase { margin-left: 0; flex: 1 1 auto; }
+
+    /* Learn */
+    .learn-page { padding: 20px 16px 60px; }
+    .learn-hero h1 { font-size: 22px; }
+    .lesson-title { font-size: 21px; }
+    .lesson-body ul, .lesson-body ol { margin-left: 18px; }
+    .unit-card { gap: 10px; }
+    .unit-link { padding: 14px; }
+    .quiz-question { padding: 12px; }
+}
+
+/* Bigger touch targets for finger input */
+@media (pointer: coarse) {
+    .viz-modal-toolbar button { min-width: 40px; min-height: 36px; }
+    .vm-close { width: 36px; height: 36px; }
+    .stab { padding: 11px 0; }
+    .tour-skip { padding: 6px 4px; }
+}

@@ -7,7 +7,7 @@
      @onpointerdown="OnPointerDown"
      @onpointermove="OnPointerMove"
      @onpointerup="OnPointerUp"
-     @onpointerleave="OnPointerUp">
+     @onpointercancel="OnPointerUp">
 
     <div class="nc-world" style="transform: translate(@Px(_panX)px, @Px(_panY)px) scale(@Px(_zoom));">
 
@@ -73,8 +73,13 @@
     private double _zoom = 1, _panX = 0, _panY = 0;
     private bool _dragging;
     private double _lastX, _lastY;
+
     private double _rectLeft, _rectTop, _vw = 800, _vh = 600;
     private string? _fittedFor;
+
+    // Active pointers by id, so two fingers can pinch-zoom while one finger pans.
+    private readonly Dictionary<long, (double X, double Y)> _pointers = new();
+    private double _pinchDist, _pinchMidX, _pinchMidY;
 
     private Dictionary<string, VizNode> _byId = new();
 
@@ -144,14 +149,40 @@
 
     private async Task OnPointerDown(PointerEventArgs e)
     {
-        _dragging = true;
-        _lastX = e.ClientX;
-        _lastY = e.ClientY;
+        _pointers[e.PointerId] = (e.ClientX, e.ClientY);
+        if (_pointers.Count == 1)
+        {
+            _dragging = true;
+            _lastX = e.ClientX;
+            _lastY = e.ClientY;
+        }
+        else
+        {
+            _dragging = false;
+            BeginPinch();
+        }
+        // Keep receiving moves when the pointer leaves the canvas mid-drag.
+        try { await JS.InvokeVoidAsync("SqlVis.capturePointer", _viewport, e.PointerId); } catch { }
         await RefreshRect();
     }
 
     private void OnPointerMove(PointerEventArgs e)
     {
+        if (!_pointers.ContainsKey(e.PointerId)) return;
+        _pointers[e.PointerId] = (e.ClientX, e.ClientY);
+
+        if (_pointers.Count >= 2)
+        {
+            var (dist, midX, midY) = PinchGeometry();
+            // Follow the midpoint (two-finger pan), then scale around it.
+            _panX += midX - _pinchMidX;
+            _panY += midY - _pinchMidY;
+            if (_pinchDist > 0 && dist > 0)
+                ZoomAt(dist / _pinchDist, midX - _rectLeft, midY - _rectTop);
+            _pinchDist = dist; _pinchMidX = midX; _pinchMidY = midY;
+            return;
+        }
+
         if (!_dragging) return;
         _panX += e.ClientX - _lastX;
         _panY += e.ClientY - _lastY;
@@ -159,7 +190,36 @@
         _lastY = e.ClientY;
     }
 
-    private void OnPointerUp(PointerEventArgs e) => _dragging = false;
+    private void OnPointerUp(PointerEventArgs e)
+    {
+        _pointers.Remove(e.PointerId);
+        if (_pointers.Count >= 2)
+        {
+            BeginPinch();
+        }
+        else if (_pointers.Count == 1)
+        {
+            // Lifting one finger of a pinch: carry on panning with the other, without a jump.
+            var p = _pointers.Values.First();
+            _lastX = p.X; _lastY = p.Y;
+            _dragging = true;
+        }
+        else
+        {
+            _dragging = false;
+        }
+    }
+
+    private void BeginPinch() => (_pinchDist, _pinchMidX, _pinchMidY) = PinchGeometry();
+
+    private (double Dist, double MidX, double MidY) PinchGeometry()
+    {
+        using var it = _pointers.Values.GetEnumerator();
+        it.MoveNext(); var a = it.Current;
+        it.MoveNext(); var b = it.Current;
+        return (Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y)),
+                (a.X + b.X) / 2, (a.Y + b.Y) / 2);
+    }
 
     // ── Edge geometry ────────────────────────────────────────────────────────
 
