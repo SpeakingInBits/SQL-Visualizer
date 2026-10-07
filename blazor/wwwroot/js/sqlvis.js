@@ -20,6 +20,11 @@ window.SqlVis = {
         element.click();
     },
 
+    /** Route a pointer's events to an element until release (drag outside the element). */
+    capturePointer: function (element, pointerId) {
+        try { if (element) element.setPointerCapture(pointerId); } catch { /* pointer already gone */ }
+    },
+
     /** Focus a DOM element. */
     focusElement: function (element) {
         if (element) element.focus();
@@ -54,17 +59,24 @@ window.SqlVis = {
     },
 
     /** Measure the first element matching a CSS selector for the onboarding tour.
+     *  When `reveal` is set, a target that is off-screen is first scrolled into view.
      *  Returns {left, top, width, height, vw, vh} or null if not found. */
-    measureTarget: function (selector) {
+    measureTarget: function (selector, reveal) {
         const vw = window.innerWidth, vh = window.innerHeight;
         if (!selector) return { left: 0, top: 0, width: 0, height: 0, vw, vh };
         const el = document.querySelector(selector);
         if (!el) return null;
+        // On small screens the layout stacks and the target may be scrolled out of
+        // view; bring it to the top so the docked card below doesn't cover it.
+        const r0 = el.getBoundingClientRect();
+        if (reveal && (r0.top < 0 || r0.bottom > vh || r0.left < 0 || r0.right > vw))
+            el.scrollIntoView({ behavior: 'instant', block: 'start', inline: 'nearest' });
         const r = el.getBoundingClientRect();
         return { left: r.left, top: r.top, width: r.width, height: r.height, vw, vh };
     },
 
-    /** Notify a .NET object (via `OnViewportChanged`) whenever the window resizes. */
+    /** Notify a .NET object (via `OnViewportChanged`) whenever the window resizes
+     *  or anything on the page scrolls (so a spotlight follows its target). */
     watchResize: function (dotnetRef) {
         this.unwatchResize();
         let timer = null;
@@ -73,11 +85,13 @@ window.SqlVis = {
             timer = setTimeout(() => dotnetRef.invokeMethodAsync('OnViewportChanged'), 80);
         };
         window.addEventListener('resize', this._resizeHandler);
+        document.addEventListener('scroll', this._resizeHandler, true);
     },
 
     unwatchResize: function () {
         if (this._resizeHandler) {
             window.removeEventListener('resize', this._resizeHandler);
+            document.removeEventListener('scroll', this._resizeHandler, true);
             this._resizeHandler = null;
         }
     }

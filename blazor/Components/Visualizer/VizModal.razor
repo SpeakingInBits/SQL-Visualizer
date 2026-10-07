@@ -36,7 +36,10 @@
 
         <div class="viz-modal-body">
             <NodeCanvas @ref="_canvas" Scene="Scene" Frame="Scene.Frames[_frame]" />
-            <div class="vm-hint">Scroll to zoom · drag to pan</div>
+            <div class="vm-hint">
+                <span class="vm-hint-mouse">Scroll to zoom · drag to pan</span>
+                <span class="vm-hint-touch">Pinch to zoom · drag to pan</span>
+            </div>
         </div>
     </div>
 </div>

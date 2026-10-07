@@ -158,6 +158,7 @@
     private const double CardH   = 260;   // estimate used only for placement
     private const double Gap     = 16;
     private const double Margin  = 12;
+    private const double NarrowW = 640;   // below this, dock the card to the top/bottom edge
 
     private Rect? _hole;
     private double _vw = 1200, _vh = 800;
@@ -190,7 +191,7 @@
         if (_needsMeasure)
         {
             _needsMeasure = false;
-            await MeasureAsync();
+            await MeasureAsync(reveal: true);
             StateHasChanged();
             try { await JS.InvokeVoidAsync("SqlVis.focusElement", _card); } catch { }
         }
@@ -199,14 +200,14 @@
     [JSInvokable]
     public async Task OnViewportChanged()
     {
-        await MeasureAsync();
+        await MeasureAsync(reveal: false);
         StateHasChanged();
     }
 
-    private async Task MeasureAsync()
+    private async Task MeasureAsync(bool reveal)
     {
         Measure? m = null;
-        try { m = await JS.InvokeAsync<Measure?>("SqlVis.measureTarget", Current.Selector); }
+        try { m = await JS.InvokeAsync<Measure?>("SqlVis.measureTarget", Current.Selector, reveal); }
         catch { }
 
         if (m != null) { _vw = m.Vw; _vh = m.Vh; }
@@ -227,10 +228,13 @@
         _cardStyle = PlaceCard(_hole);
     }
 
-    /// <summary>Pick a spot for the card: right of the hole, else below, else above, else centered.</summary>
+    /// <summary>Pick a spot for the card: right of the hole, else below, else above, else
+    /// docked to whichever screen edge is farther from the hole. Phones always dock.</summary>
     private string PlaceCard(Rect h)
     {
         static double Clamp(double v, double min, double max) => Math.Max(min, Math.Min(v, max));
+
+        if (_vw < NarrowW) return DockCard(h);
 
         if (h.Right + Gap + CardW + Margin <= _vw)
         {
@@ -247,7 +251,28 @@
             var left = Clamp(h.Left, Margin, Math.Max(Margin, _vw - CardW - Margin));
             return $"left:{Px(left)};top:{Px(h.Top - Gap - CardH)};width:{Px(CardW)}";
         }
-        return "";
+        return DockCard(h);
+    }
+
+    /// <summary>Card pinned to the top or bottom screen edge, away from the hole.
+    /// Its height is capped to the free space (but never below 40% of the screen) and
+    /// the card scrolls internally if its content is taller.</summary>
+    private string DockCard(Rect h)
+    {
+        var minH = _vh * 0.4;
+        var holeMid = h.Top + h.Height / 2;
+        var width = Math.Min(CardW + 60, _vw - Margin * 2);
+        var left = (_vw - width) / 2;
+        if (holeMid <= _vh / 2)
+        {
+            var maxH = Math.Max(minH, _vh - h.Bottom - Gap - Margin);
+            return $"left:{Px(left)};bottom:{Px(Margin)};width:{Px(width)};max-height:{Px(maxH)}";
+        }
+        else
+        {
+            var maxH = Math.Max(minH, h.Top - Gap - Margin);
+            return $"left:{Px(left)};top:{Px(Margin)};width:{Px(width)};max-height:{Px(maxH)}";
+        }
     }
 
     private void Go(int step)
