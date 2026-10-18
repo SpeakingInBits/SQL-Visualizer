@@ -221,15 +221,20 @@ public class QueryExecutorService
     //  WHERE visualiser
     // ─────────────────────────────────────────────────────────────────────────
 
-    private static WhereResult VizWhere(SqliteConnection c, string sql)
+    /// <summary>The WHERE clause body (without the keyword or a trailing ';'), or "" if none.</summary>
+    private static string ExtractWhere(string sql)
     {
-        // Extract WHERE text
         var whereMatch = Regex.Match(sql,
-            @"\bWHERE\b\s*(.+?)(?:\bORDER\s+BY\b|\bGROUP\s+BY\b|\bHAVING\b|\bLIMIT\b|$)",
+            @"\bWHERE\b\s*(.+?)(?:\bORDER\s+BY\b|\bGROUP\s+BY\b|\bHAVING\b|\bLIMIT\b|\bUNION\b|\bINTERSECT\b|\bEXCEPT\b|$)",
             RegexOptions.IgnoreCase | RegexOptions.Singleline);
         var whereText = whereMatch.Success ? whereMatch.Groups[1].Value.Trim() : "";
         // Drop a trailing statement terminator so it doesn't leak into the last condition
-        whereText = whereText.TrimEnd().TrimEnd(';').TrimEnd();
+        return whereText.TrimEnd().TrimEnd(';').TrimEnd();
+    }
+
+    private static WhereResult VizWhere(SqliteConnection c, string sql)
+    {
+        var whereText = ExtractWhere(sql);
 
         // All rows (no WHERE)
         var noWhereSql = Regex.Replace(
@@ -334,11 +339,14 @@ public class QueryExecutorService
 
     private static JoinChainResult VizJoinChain(SqliteConnection c, string sql)
     {
+        // In a compound query (… UNION SELECT …) only the first SELECT is visualized
+        sql = Regex.Split(sql, @"\b(?:UNION|INTERSECT|EXCEPT)\b", RegexOptions.IgnoreCase)[0];
+
         // Isolate the FROM…JOIN chain (up to WHERE/GROUP/ORDER/LIMIT)
         var fromMatch = Regex.Match(sql,
             @"\bFROM\s+(.+?)(?:\bWHERE\b|\bGROUP\s+BY\b|\bORDER\s+BY\b|\bLIMIT\b|$)",
             RegexOptions.IgnoreCase | RegexOptions.Singleline);
-        var fromClause = fromMatch.Success ? fromMatch.Groups[1].Value.Trim() : "";
+        var fromClause = fromMatch.Success ? fromMatch.Groups[1].Value.Trim().TrimEnd(';').TrimEnd() : "";
 
         // First (driving) table + optional alias
         var firstMatch = Regex.Match(fromClause, @"^\s*(\w+)(?:\s+(?:AS\s+)?(\w+))?", RegexOptions.IgnoreCase);
@@ -353,7 +361,9 @@ public class QueryExecutorService
 
         foreach (Match jm in Regex.Matches(fromClause, JoinPattern, RegexOptions.IgnoreCase | RegexOptions.Singleline))
         {
-            joinTypes.Add(jm.Groups[1].Length > 0 ? jm.Groups[1].Value.Trim().ToUpperInvariant() + " JOIN" : "JOIN");
+            joinTypes.Add(jm.Groups[1].Length > 0
+                ? Regex.Replace(jm.Groups[1].Value.Trim().ToUpperInvariant(), @"\s+", " ") + " JOIN"
+                : "JOIN");
             tableNames.Add(jm.Groups[2].Value);
             aliases.Add(AliasOrNull(jm.Groups[3].Value));
             onConds.Add(jm.Groups[4].Value.Trim());
@@ -364,16 +374,35 @@ public class QueryExecutorService
                 "Could not parse this JOIN for visualization. Supported form: " +
                 "FROM a [x] JOIN b [y] ON x.col = y.col [JOIN c …]");
 
-        // Fetch each participating table (capped)
-        var tableCols = new List<List<ColumnHeader>>();
-        var tableRows = new List<List<Dictionary<string, object?>>>();
-        bool truncated = false;
-        foreach (var t in tableNames)
+        var whereText  = ExtractWhere(sql);
+        var conditions = whereText.Length > 0 ? SplitTopLevelAnd(whereText) : new List<string>();
+
+        // Preferred: let SQLite perform the join and report which source rows formed each
+        // joined row. Falls back to matching equi-join keys here when the sources have no
+        // rowid (views, WITHOUT ROWID tables) — inner-join semantics only, WHERE not applied.
+        var exact = TryJoinViaRowids(c, tableNames, aliases, fromClause, whereText, conditions);
+
+        List<List<ColumnHeader>> tableCols;
+        List<List<Dictionary<string, object?>>> tableRows;
+        bool truncated;
+        if (exact != null)
         {
-            var (cols, rows) = FetchWithColumns(c, $"SELECT * FROM {t}", MaxJoinRows);
-            tableCols.Add(cols);
-            tableRows.Add(rows);
-            if (rows.Count >= MaxJoinRows) truncated = true;
+            tableCols = exact.TableCols;
+            tableRows = exact.TableRows;
+            truncated = exact.Truncated;
+        }
+        else
+        {
+            tableCols = new();
+            tableRows = new();
+            truncated = false;
+            foreach (var t in tableNames)
+            {
+                var (cols, rows) = FetchWithColumns(c, $"SELECT * FROM {t}", MaxJoinRows);
+                tableCols.Add(cols);
+                tableRows.Add(rows);
+                if (rows.Count >= MaxJoinRows) truncated = true;
+            }
         }
 
         // Map each table name / alias → its index, so an ON condition can be tied
@@ -395,7 +424,14 @@ public class QueryExecutorService
                 ResolveJoinKeys(onConds[k], k + 1, tableCols, refToIdx);
 
             var pairs = new List<(int L, int R)>();
-            if (leftKey != null && rightKey != null)
+            if (exact != null)
+            {
+                pairs = exact.Paths
+                    .Where(p => p[leftIdx] != JoinChainResult.NoMatch && p[k + 1] != JoinChainResult.NoMatch)
+                    .Select(p => (p[leftIdx], p[k + 1]))
+                    .Distinct().ToList();
+            }
+            else if (leftKey != null && rightKey != null)
             {
                 var left = tableRows[leftIdx];
                 var right = tableRows[k + 1];
@@ -412,17 +448,30 @@ public class QueryExecutorService
             steps.Add(new JoinStep(joinTypes[k], onConds[k], leftKey, rightKey, pairs, leftIdx));
         }
 
-        // Enumerate inner-join paths (nested loop, first table outer) so each
-        // output row maps to the exact source rows across every table.
-        var paths = EnumerateJoinPaths(steps, tableRows[0].Count, MaxJoinRows);
-        if (paths.Count >= MaxJoinRows) truncated = true;
+        List<int[]> paths;
+        if (exact != null) paths = exact.Paths;
+        else
+        {
+            // Enumerate inner-join paths (nested loop, first table outer) so each
+            // output row maps to the exact source rows across every table.
+            paths = EnumerateJoinPaths(steps, tableRows[0].Count, MaxJoinRows);
+            if (paths.Count >= MaxJoinRows) truncated = true;
+        }
 
-        // Build the joined result rows from the SELECT projection
+        // Joined-row columns: the SELECT projection, plus (when filtering) any column the
+        // WHERE reads that the projection leaves out — so you can see why a row passes.
         var specs = ParseProjection(sql, tableNames, aliases, tableCols);
+        var joinedSpecs = new List<(string Header, int T, string Col)>(specs);
+        bool filtering = exact != null && whereText.Length > 0;
+        if (filtering)
+            foreach (var extra in ReferencedColumns(whereText, tableNames, aliases, tableCols, refToIdx))
+                if (!joinedSpecs.Any(s => s.T == extra.T && string.Equals(s.Col, extra.Col, StringComparison.OrdinalIgnoreCase)))
+                    joinedSpecs.Add(extra);
+
         var seen = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var keys = new List<string>();
         var mergedCols = new List<ColumnHeader>();
-        foreach (var s in specs)
+        foreach (var s in joinedSpecs)
         {
             var name = s.Header;
             if (seen.TryGetValue(name, out var cnt)) { seen[name] = cnt + 1; name = $"{name}_{cnt + 1}"; }
@@ -433,16 +482,165 @@ public class QueryExecutorService
         var mergedRows = paths.Select(p =>
         {
             var row = new Dictionary<string, object?>();
-            for (int s = 0; s < specs.Count; s++)
+            for (int s = 0; s < joinedSpecs.Count; s++)
             {
-                var src = tableRows[specs[s].T][p[specs[s].T]];
-                row[keys[s]] = src.TryGetValue(specs[s].Col, out var v) ? v : null;
+                // A table the outer join found no match in contributes NULLs
+                int ri = p[joinedSpecs[s].T];
+                row[keys[s]] = ri != JoinChainResult.NoMatch
+                    && tableRows[joinedSpecs[s].T][ri].TryGetValue(joinedSpecs[s].Col, out var v) ? v : null;
             }
             return row;
         }).ToList();
 
+        JoinFilter? filter = filtering
+            ? new JoinFilter(whereText, conditions, exact!.ConditionResults, exact.MatchMask,
+                             mergedCols.Take(specs.Count).ToList())
+            : null;
+
         return new JoinChainResult(tableNames, aliases, tableCols, tableRows, steps,
-            paths, mergedCols, mergedRows, truncated);
+            paths, mergedCols, mergedRows, truncated, filter);
+    }
+
+    private sealed record RowidJoin(
+        List<List<ColumnHeader>> TableCols,
+        List<List<Dictionary<string, object?>>> TableRows,
+        List<int[]> Paths,                       // sorted by source row, NoMatch last
+        List<List<bool>> ConditionResults,       // [condition][path]
+        List<bool> MatchMask,                    // [path] passes the whole WHERE
+        bool Truncated);
+
+    /// <summary>Has SQLite run the FROM…JOIN chain and report every joined row as the rowid it
+    /// took from each table (NULL where an outer join found no match), along with whether each
+    /// WHERE condition holds for it. That gives exact join semantics — LEFT/RIGHT/FULL/CROSS,
+    /// compound ON clauses, NULL comparisons — without re-implementing them here.
+    /// Returns null when a source has no rowid (a view or WITHOUT ROWID table).</summary>
+    private static RowidJoin? TryJoinViaRowids(SqliteConnection c, List<string> tableNames,
+        List<string?> aliases, string fromClause, string whereText, List<string> conditions)
+    {
+        int t = tableNames.Count;
+        var rowids = Enumerable.Range(0, t).Select(k => $"{aliases[k] ?? tableNames[k]}.rowid").ToList();
+        try { FetchRows(c, $"SELECT {string.Join(", ", rowids)} FROM {fromClause} LIMIT 0"); }
+        catch (SqliteException) { return null; }
+
+        // CASE so that NULL (unknown) counts as false, exactly as WHERE treats it. Any error
+        // past this point is a genuine problem with the query, so let it surface.
+        var tests = conditions.Select(cond => $"CASE WHEN ({cond}) THEN 1 ELSE 0 END").ToList();
+        if (whereText.Length > 0) tests.Add($"CASE WHEN ({whereText}) THEN 1 ELSE 0 END");
+
+        var tuples = new List<long?[]>();
+        var flags = new List<bool[]>();
+        bool truncated = false;
+        using (var cmd = c.CreateCommand())
+        {
+            cmd.CommandText = $"SELECT {string.Join(", ", rowids.Concat(tests))} FROM {fromClause}";
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                if (tuples.Count >= MaxJoinRows) { truncated = true; break; }
+                var tuple = new long?[t];
+                for (int k = 0; k < t; k++) tuple[k] = reader.IsDBNull(k) ? null : reader.GetInt64(k);
+                var f = new bool[tests.Count];
+                for (int i = 0; i < f.Length; i++) f[i] = reader.GetInt64(t + i) != 0;
+                tuples.Add(tuple);
+                flags.Add(f);
+            }
+        }
+
+        // Load each table (in rowid order) and translate rowids into row positions
+        var tableCols = new List<List<ColumnHeader>>();
+        var tableRows = new List<List<Dictionary<string, object?>>>();
+        var posOf = new List<Dictionary<long, int>>();
+        for (int k = 0; k < t; k++)
+        {
+            var needed = tuples.Select(p => p[k]).OfType<long>().ToHashSet();
+            var (cols, rows, ids, more) = FetchTableByRowid(c, tableNames[k], needed);
+            tableCols.Add(cols);
+            tableRows.Add(rows);
+            posOf.Add(ids.Select((id, i) => (id, i)).ToDictionary(x => x.id, x => x.i));
+            truncated |= more;
+        }
+        var unsorted = tuples.Select(p => Enumerable.Range(0, t)
+            .Select(k => p[k] is long id ? posOf[k][id] : JoinChainResult.NoMatch).ToArray()).ToList();
+
+        // Present joined rows in source order (first table outermost), with rows that have
+        // no partner on the left — RIGHT/FULL joins — after the rest, as SQLite emits them.
+        var order = Enumerable.Range(0, unsorted.Count)
+            .OrderBy(i => unsorted[i], Comparer<int[]>.Create(ComparePaths)).ToList();
+        var paths = order.Select(i => unsorted[i]).ToList();
+        var condResults = conditions.Select((_, ci) => order.Select(i => flags[i][ci]).ToList()).ToList();
+        var mask = whereText.Length > 0
+            ? order.Select(i => flags[i][conditions.Count]).ToList()
+            : order.Select(_ => true).ToList();
+
+        return new RowidJoin(tableCols, tableRows, paths, condResults, mask, truncated);
+    }
+
+    private static int ComparePaths(int[] a, int[] b)
+    {
+        for (int k = 0; k < a.Length; k++)
+        {
+            int x = a[k] == JoinChainResult.NoMatch ? int.MaxValue : a[k];
+            int y = b[k] == JoinChainResult.NoMatch ? int.MaxValue : b[k];
+            if (x != y) return x.CompareTo(y);
+        }
+        return 0;
+    }
+
+    /// <summary>Fetches a table's first MaxJoinRows rows in rowid order, plus any later rows in
+    /// <paramref name="required"/> (ones a joined row uses), returning each row's rowid.</summary>
+    private static (List<ColumnHeader> Cols, List<Dictionary<string, object?>> Rows, List<long> RowIds, bool Truncated)
+        FetchTableByRowid(SqliteConnection c, string table, HashSet<long> required)
+    {
+        var byId = new SortedDictionary<long, Dictionary<string, object?>>();
+        var cols = new List<ColumnHeader>();
+        bool more = false;
+
+        void Read(string sql, int cap)
+        {
+            using var cmd = c.CreateCommand();
+            cmd.CommandText = sql;
+            using var reader = cmd.ExecuteReader();
+            // Column 0 is the rowid; the table's own columns follow
+            cols = Enumerable.Range(1, reader.FieldCount - 1).Select(i => new ColumnHeader(reader.GetName(i))).ToList();
+            int n = 0;
+            while (reader.Read())
+            {
+                if (n++ >= cap) { more = true; break; }
+                var row = new Dictionary<string, object?>(cols.Count);
+                for (int i = 0; i < cols.Count; i++)
+                    row[cols[i].Name] = reader.IsDBNull(i + 1) ? null : reader.GetValue(i + 1);
+                byId[reader.GetInt64(0)] = row;
+            }
+        }
+
+        Read($"SELECT rowid, * FROM {table} ORDER BY rowid", MaxJoinRows);
+        var missing = required.Where(id => !byId.ContainsKey(id)).ToList();
+        if (missing.Count > 0)
+            Read($"SELECT rowid, * FROM {table} WHERE rowid IN ({string.Join(",", missing)})", int.MaxValue);
+        return (cols, byId.Values.ToList(), byId.Keys.ToList(), more);
+    }
+
+    /// <summary>The table columns an expression (e.g. a WHERE clause) reads, as
+    /// alias-qualified (header, tableIndex, column) specs.</summary>
+    private static List<(string Header, int T, string Col)> ReferencedColumns(
+        string expr, List<string> tableNames, List<string?> aliases,
+        List<List<ColumnHeader>> tableCols, Dictionary<string, int> refToIdx)
+    {
+        var found = new List<(string Header, int T, string Col)>();
+        // Ignore anything inside string literals
+        var code = Regex.Replace(expr, @"'(?:[^']|'')*'", "''");
+        foreach (Match m in Regex.Matches(code, @"\b(?:(\w+)\.)?(\w+)\b"))
+        {
+            string r = m.Groups[1].Value, col = m.Groups[2].Value;
+            int ti = r.Length > 0
+                ? (refToIdx.TryGetValue(r, out var i) && ColInTable(tableCols[i], col) ? i : -1)
+                : FindTableWithColumn(tableCols, col);
+            if (ti < 0) continue;
+            var name = tableCols[ti].First(h => string.Equals(h.Name, col, StringComparison.OrdinalIgnoreCase)).Name;
+            if (!found.Any(f => f.T == ti && f.Col == name))
+                found.Add(($"{aliases[ti] ?? tableNames[ti]}.{name}", ti, name));
+        }
+        return found;
     }
 
     /// <summary>Enumerates inner-join row-index tuples across the table chain.</summary>
@@ -618,24 +816,41 @@ public class QueryExecutorService
     //  Helpers
     // ─────────────────────────────────────────────────────────────────────────
 
-    /// <summary>Splits a WHERE expression on top-level AND (respects parentheses).</summary>
+    /// <summary>Splits a WHERE expression on top-level AND (respects parentheses, string
+    /// literals, and the AND that belongs to <c>BETWEEN x AND y</c>).</summary>
     private static List<string> SplitTopLevelAnd(string expr)
     {
+        static bool IsWordChar(char ch) => char.IsLetterOrDigit(ch) || ch == '_';
+
         var parts = new List<string>();
         int depth = 0;
         int start = 0;
+        bool inBetween = false;
         for (int i = 0; i < expr.Length; i++)
         {
-            if (expr[i] == '(') depth++;
-            else if (expr[i] == ')') depth--;
-            else if (depth == 0 && i + 3 < expr.Length &&
-                     expr[i..].StartsWith("AND", StringComparison.OrdinalIgnoreCase) &&
-                     (i == 0 || !char.IsLetterOrDigit(expr[i - 1])) &&
-                     !char.IsLetterOrDigit(expr[i + 3]))
+            char ch = expr[i];
+            if (ch == '\'')
             {
-                parts.Add(expr[start..i].Trim());
-                start = i + 3;
-                i += 2;
+                // Skip to the closing quote ('' is an escaped quote)
+                int j = i + 1;
+                while (j < expr.Length && !(expr[j] == '\'' && (j + 1 >= expr.Length || expr[j + 1] != '\'')))
+                    j += expr[j] == '\'' ? 2 : 1;
+                i = j;
+            }
+            else if (ch == '(') depth++;
+            else if (ch == ')') depth--;
+            else if (depth == 0 && IsWordChar(ch) && (i == 0 || !IsWordChar(expr[i - 1])))
+            {
+                int end = i;
+                while (end < expr.Length && IsWordChar(expr[end])) end++;
+                var word = expr[i..end];
+                if (word.Equals("BETWEEN", StringComparison.OrdinalIgnoreCase)) inBetween = true;
+                else if (word.Equals("AND", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (inBetween) inBetween = false;
+                    else { parts.Add(expr[start..i].Trim()); start = end; }
+                }
+                i = end - 1;
             }
         }
         parts.Add(expr[start..].Trim());

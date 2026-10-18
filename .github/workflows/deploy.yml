@@ -31,6 +31,9 @@ jobs:
           dotnet-version: '10.0.x'
           include-prerelease: true
 
+      - name: Run tests
+        run: dotnet test tests/SqlVisualizer.Tests
+
       - name: Install wasm-tools workload
         run: dotnet workload install wasm-tools
 

@@ -84,6 +84,15 @@ public record JoinStep(
     List<(int L, int R)> MatchPairs,
     int LeftTableIndex);
 
+/// A WHERE clause applied to the joined rows of a <see cref="JoinChainResult"/>.
+/// Each list is indexed by joined row (parallel to JoinPaths / MergedRows).
+public record JoinFilter(
+    string WhereText,
+    List<string> Conditions,                    // top-level AND parts of WhereText
+    List<List<bool>> ConditionResults,          // [condition][joined row] → condition is TRUE
+    List<bool> MatchMask,                       // joined row passes the whole WHERE
+    List<ColumnHeader> ResultColumns);          // the SELECT projection (a subset of MergedColumns)
+
 /// A chain of one or more joins across N tables laid out left-to-right.
 public record JoinChainResult(
     List<string> TableNames,
@@ -91,11 +100,17 @@ public record JoinChainResult(
     List<List<ColumnHeader>> TableColumns,
     List<List<Dictionary<string, object?>>> TableRows,
     List<JoinStep> Steps,                       // Count == TableNames.Count - 1
-    List<int[]> JoinPaths,                       // one per output row: source row index per table
-    List<ColumnHeader> MergedColumns,
+    List<int[]> JoinPaths,                      // one per joined row: source row index per table,
+                                                // or NoMatch where an outer join filled in NULLs
+    List<ColumnHeader> MergedColumns,           // projection, plus any columns the WHERE reads
     List<Dictionary<string, object?>> MergedRows,
-    bool Truncated)
-    : VizResult("join_chain");
+    bool Truncated,
+    JoinFilter? Filter = null)                  // null when the query has no WHERE
+    : VizResult("join_chain")
+{
+    /// JoinPaths entry for a table that had no matching row (NULL-extended by an outer join).
+    public const int NoMatch = -1;
+}
 
 // ── Scripts ───────────────────────────────────────────────────────────────────
 

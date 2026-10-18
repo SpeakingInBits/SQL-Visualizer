@@ -270,6 +270,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .nc-row.new { border-color: var(--accent); background: rgba(137,180,250,.24); animation: nc-pop .3s ease; }
 .nc-row.kept { border-color: var(--green); background: rgba(166,227,161,.14); }
 .nc-row.cut { opacity: .3; text-decoration: line-through; border-color: var(--red); }
+.nc-row.outer { border-color: var(--purple); border-style: dashed; background: rgba(203,166,247,.14); } /* kept by an outer join, NULLs on the other side */
 @keyframes nc-pop { from { transform: scale(.95); } to { transform: scale(1); } }
 
 /* ── Learn section ───────────────────────────────────────────────────────── */

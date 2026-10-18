@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!-- The visualizer's query + layout logic is plain C#, so compile those sources
+       straight in rather than referencing the WebAssembly app (which would need
+       the wasm-tools workload and a native SQLite link just to run tests). -->
+  <ItemGroup>
+    <Compile Include="..\..\blazor\Models\Models.cs" Link="App\Models.cs" />
+    <Compile Include="..\..\blazor\Models\Scene.cs" Link="App\Scene.cs" />
+    <Compile Include="..\..\blazor\Services\QueryExecutorService.cs" Link="App\QueryExecutorService.cs" />
+    <Compile Include="..\..\blazor\Services\SceneBuilderService.cs" Link="App\SceneBuilderService.cs" />
+    <Compile Include="..\..\blazor\Services\SampleDatabaseService.cs" Link="App\SampleDatabaseService.cs" />
+    <Compile Include="..\..\blazor\Services\SqliteConnectionService.cs" Link="App\SqliteConnectionService.cs" />
+  </ItemGroup>
+
+  <!-- Lesson content, so every example query in the course gets visualized -->
+  <ItemGroup>
+    <None Include="..\..\blazor\wwwroot\content\lessons\**\*" LinkBase="lessons" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Same SQLite build as the app, so join semantics (RIGHT/FULL OUTER) match -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.7" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.2" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>
