@@ -44,9 +44,11 @@ public sealed class SampleDb : IDisposable
 /// <summary>Assertions over a rendered <see cref="VizScene"/> — what the canvas would draw.</summary>
 public static class SceneAssert
 {
-    /// <summary>Every id a frame or edge refers to exists, and every frame is renderable.</summary>
+    /// <summary>Every id a frame or edge refers to exists, and every frame (including the
+    /// in-depth alternative, if any) is renderable.</summary>
     public static void WellFormed(VizScene scene)
     {
+        if (scene.DetailFrames != null) WellFormed(InDepth(scene));
         var ids = scene.Nodes.Select(n => n.Id).ToList();
         Assert.Equal(ids.Count, ids.Distinct().Count());
         var idSet = ids.ToHashSet();
@@ -118,6 +120,10 @@ public static class SceneAssert
 
         Assert.Equal(Canon(db.Query(sql)), Canon(FinalRows(scene)));
     }
+
+    /// <summary>The scene as the in-depth toggle plays it.</summary>
+    public static VizScene InDepth(VizScene scene)
+        => scene with { Frames = scene.DetailFrames!, DetailFrames = null };
 
     public static string StateOf(VizFrame frame, string nodeId)
         => frame.States.TryGetValue(nodeId, out var s) ? s : "";
