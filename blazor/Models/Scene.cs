@@ -39,4 +39,6 @@ public record VizScene(
     List<VizEdge> Edges,
     List<VizFrame> Frames,
     double Width,
-    double Height);
+    double Height,
+    List<VizFrame>? DetailFrames = null,  // in-depth alternative to Frames (same nodes/edges)
+    string? DetailUnavailable = null);    // why a scene that could have DetailFrames doesn't

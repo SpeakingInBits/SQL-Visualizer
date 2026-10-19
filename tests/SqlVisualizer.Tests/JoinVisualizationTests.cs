@@ -268,6 +268,138 @@ public class JoinVisualizationTests : IDisposable
             _db.Visualize("SELECT s.name FROM students s JOIN enrollments e ON e.student_id = s.id WHERE e.nope = 1;"));
     }
 
+    // ── In-depth view: every row comparison (issue #15) ──────────────────────
+
+    private const string InnerJoin = "SELECT s.name, e.grade FROM students s JOIN enrollments e ON e.student_id = s.id;";
+    private const int Ivy = 8;   // students row with no enrollments
+
+    private static List<VizFrame> CompareFrames(VizScene scene)
+        => scene.DetailFrames!.Where(f => f.Phase!.StartsWith("Compare ")).ToList();
+
+    [Theory]
+    [InlineData(InnerJoin)]
+    [InlineData(LeftJoin)]
+    [InlineData("SELECT s.name, a.name FROM students s RIGHT JOIN alumni a ON s.name = a.name;")]
+    [InlineData("SELECT s.name AS student_name, a.name AS alumni_name FROM students s FULL OUTER JOIN alumni a ON s.name = a.name;")]
+    [InlineData("SELECT s.name AS student, m.name AS mentor FROM students s LEFT JOIN students m ON s.mentor_id = m.id;")]
+    [InlineData("SELECT s.name, e.grade FROM students s LEFT JOIN enrollments e ON e.student_id = s.id AND e.grade = 'A';")]
+    [InlineData("SELECT s.name FROM students s LEFT JOIN enrollments e ON e.student_id = s.id WHERE e.id IS NULL;")]
+    public void InDepth_EndsWithTheSameResult(string sql)
+    {
+        var (_, scene) = Viz(sql);
+        Assert.NotNull(scene.DetailFrames);
+        Assert.Null(scene.DetailUnavailable);
+        SceneAssert.ShowsQueryResult(_db, SceneAssert.InDepth(scene), sql);
+    }
+
+    [Fact]
+    public void InDepth_ComparesEachLeftRowWithEveryRightRow()
+    {
+        var (result, scene) = Viz(InnerJoin);
+
+        // SQLite's ON result for all 9 × 13 pairs; exactly the joined pairs are true
+        var cmp = Assert.IsType<bool[][]>(result.Comparisons);
+        Assert.Equal(9, cmp.Length);
+        Assert.All(cmp, row => Assert.Equal(13, row.Length));
+        var hits = Enumerable.Range(0, 9).SelectMany(l => Enumerable.Range(0, 13).Where(r => cmp[l][r]).Select(r => (l, r)));
+        Assert.Equal(result.JoinPaths.Select(p => (p[0], p[1])).OrderBy(x => x), hits.OrderBy(x => x));
+
+        // One step per students row, each drawing a connector to every enrollments row
+        var compares = CompareFrames(scene);
+        Assert.Equal(9, compares.Count);
+        for (int l = 0; l < 9; l++)
+        {
+            var f = compares[l];
+            Assert.Equal("active", SceneAssert.StateOf(f, $"t0-row-{l}"));
+            Assert.Equal(13, f.ActiveEdges.Count);
+            for (int r = 0; r < 13; r++)
+            {
+                var edge = scene.Edges[f.ActiveEdges[r]];
+                Assert.Equal(($"t0-row-{l}", $"t1-row-{r}"), (edge.FromId, edge.ToId));
+                Assert.Equal(cmp[l][r] ? "hit" : "miss", edge.Kind);
+                Assert.Equal(cmp[l][r] ? "active" : "miss", SceneAssert.StateOf(f, $"t1-row-{r}"));
+            }
+        }
+        Assert.StartsWith("Compare students row 1 with each enrollments row: ON is true for 2, false for 11", compares[0].Phase);
+
+        // The normal walkthrough doesn't show the comparisons
+        Assert.DoesNotContain(scene.Frames, f => f.Phase!.StartsWith("Compare "));
+    }
+
+    [Fact]
+    public void InDepth_FormsEachLeftRowsMatchesRightAfterComparingIt()
+    {
+        var (result, scene) = Viz(InnerJoin);
+        var phases = scene.DetailFrames!.Select(f => f.Phase!).ToList();
+        for (int l = 0; l < 8; l++)
+        {
+            int at = phases.FindIndex(p => p.StartsWith($"Compare students row {l + 1} "));
+            int matches = result.JoinPaths.Count(p => p[0] == l);
+            // compare, then forming + emit per joined row, then the next compare
+            Assert.All(phases.Skip(at + 1).Take(2 * matches), p => Assert.DoesNotContain("Compare", p));
+            Assert.StartsWith("Compare ", phases[at + 1 + 2 * matches]);
+        }
+    }
+
+    [Fact]
+    public void InDepth_InnerJoinDropsALeftRowWithNoMatch()
+    {
+        var (_, scene) = Viz(InnerJoin);
+        var ivy = CompareFrames(scene)[Ivy];
+
+        Assert.EndsWith("false for all 13 — no match, so the JOIN drops this row", ivy.Phase);
+        Assert.All(ivy.ActiveEdges, ei => Assert.Equal("miss", scene.Edges[ei].Kind));
+        Assert.Equal("rejected", SceneAssert.StateOf(scene.DetailFrames![^1], $"t0-row-{Ivy}"));
+    }
+
+    [Fact]
+    public void InDepth_LeftJoinKeepsALeftRowWithNoMatch()
+    {
+        var (_, scene) = Viz(LeftJoin);
+        var ivy = CompareFrames(scene)[Ivy];
+
+        Assert.EndsWith("false for all 13 — no match", ivy.Phase);
+        var next = scene.DetailFrames![scene.DetailFrames.IndexOf(ivy) + 1];
+        Assert.StartsWith("No match in enrollments — the outer join keeps", next.Phase);
+    }
+
+    [Fact]
+    public void InDepth_NullComparisonsCountAsFalse()
+    {
+        // Carol has no mentor: NULL = m.id is unknown for every row, never true
+        var (result, scene) = Viz("SELECT s.name AS student, m.name AS mentor FROM students s LEFT JOIN students m ON s.mentor_id = m.id;");
+        Assert.All(result.Comparisons![2], Assert.False);
+        Assert.StartsWith("Compare s row 3 with each m row", CompareFrames(scene)[2].Phase);
+    }
+
+    [Fact]
+    public void InDepth_UnavailableWithMoreThanOneJoin()
+    {
+        var (result, scene) = Viz("SELECT s.name, c.title FROM students s JOIN enrollments e ON e.student_id = s.id JOIN courses c ON c.id = e.course_id;");
+        Assert.Null(result.Comparisons);
+        Assert.Null(scene.DetailFrames);
+        Assert.Contains("single JOIN", scene.DetailUnavailable);
+    }
+
+    [Fact]
+    public void InDepth_UnavailableWithoutAnOnCondition()
+    {
+        var (_, scene) = Viz("SELECT c.title, a.name FROM courses c CROSS JOIN alumni a;");
+        Assert.Null(scene.DetailFrames);
+        Assert.Contains("without an ON condition", scene.DetailUnavailable);
+    }
+
+    [Fact]
+    public void InDepth_UnavailableForTooManyRowPairs()
+    {
+        _db.Run("CREATE TABLE big (id INTEGER PRIMARY KEY)");
+        _db.Run("WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 30) INSERT INTO big SELECT i FROM n");
+        var (result, scene) = Viz("SELECT x.id FROM big x JOIN big y ON x.id = y.id;");
+        Assert.False(result.Truncated);                   // 30 × 30 = 900 pairs, over the cap
+        Assert.Null(scene.DetailFrames);
+        Assert.Contains("Too many rows", scene.DetailUnavailable);
+    }
+
     // ── Fallback for sources without rowids ──────────────────────────────────
 
     [Fact]

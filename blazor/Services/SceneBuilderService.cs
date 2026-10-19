@@ -66,11 +66,12 @@ public class SceneBuilderService
         => ids.Where((_, i) => i >= revealedCount).ToHashSet();
 
     private static VizScene Finish(string type, string title, string subtitle,
-        List<VizNode> nodes, List<VizEdge> edges, List<VizFrame> frames)
+        List<VizNode> nodes, List<VizEdge> edges, List<VizFrame> frames,
+        List<VizFrame>? detailFrames = null, string? detailUnavailable = null)
     {
         double w = nodes.Count > 0 ? nodes.Max(n => n.X + n.W) + Pad : 400;
         double h = nodes.Count > 0 ? nodes.Max(n => n.Y + n.H) + Pad : 300;
-        return new VizScene(type, title, subtitle, nodes, edges, frames, w, h);
+        return new VizScene(type, title, subtitle, nodes, edges, frames, w, h, detailFrames, detailUnavailable);
     }
 
     private static string RowKey(Dictionary<string, object?> row)
@@ -423,106 +424,181 @@ public class SceneBuilderService
         // Joined rows carrying NULLs from an outer join keep a distinct look throughout
         string JoinedState(int i) => IsOuter(j.JoinPaths[i]) ? "outer" : "matched";
 
-        var frames = new List<VizFrame>
-        {
-            F(hidden: Hide(0, 0), phase: $"Ready — {mm} joined row(s)")
-        };
-        var used = new HashSet<string>();
-        for (int i = 0; i < mm; i++)
-        {
-            var p = j.JoinPaths[i];
-
-            // Dim every source row, then surface the ones in play: prior rows stay
-            // dim-green (matched), the current path's rows light up (active). A row an
-            // outer join keeps without a partner is marked "outer" instead.
-            bool outer = IsOuter(p);
-            var active = allSourceIds.ToDictionary(id => id, _ => "dim");
-            foreach (var id in used) active[id] = "matched";
-            for (int k = 0; k < t; k++)
-                if (Has(p, k)) active[tableRowIds[k][p[k]]] = outer ? "outer" : "active";
-            for (int prev = 0; prev < i; prev++)
-                if (IsOuter(j.JoinPaths[prev])) active[mRowIds[prev]] = "outer";
-
-            string forming, emitting;
-            if (outer)
+        // In-depth view (single join): one connector per left/right row pair, marked by
+        // whether the ON condition holds, so each left row is seen tested against every
+        // right row — the misses as well as the matches.
+        var cmp = j.Comparisons;
+        var cmpEdges = new List<List<int>>();   // [left row][right row] → edge index
+        if (cmp != null)
+            for (int l = 0; l < cmp.Length; l++)
             {
-                var kept = string.Join(" + ", Enumerable.Range(0, t).Where(k => Has(p, k)).Select(Ref));
-                var missing = string.Join(", ", Enumerable.Range(0, t).Where(k => !Has(p, k)).Select(Ref));
-                forming = $"No match in {missing} — the outer join keeps this {kept} row";
-                emitting = $"Add joined row {i + 1} with NULLs for {missing}";
+                var row = new List<int>();
+                for (int r = 0; r < cmp[l].Length; r++)
+                {
+                    row.Add(edges.Count);
+                    edges.Add(new VizEdge(tableRowIds[0][l], tableRowIds[1][r], cmp[l][r] ? "hit" : "miss"));
+                }
+                cmpEdges.Add(row);
+            }
+
+        var frames = BuildFrames(inDepth: false);
+        var detail = cmp != null ? BuildFrames(inDepth: true) : null;
+
+        List<VizFrame> BuildFrames(bool inDepth)
+        {
+            var frames = new List<VizFrame>();
+            var used = new HashSet<string>();
+            var dropped = new HashSet<string>();   // left rows the join discards (in-depth only)
+
+            // Dim every source row except those already used (dim-green) or dropped, and
+            // keep the look of the joined rows added so far.
+            Dictionary<string, string> Base(int joinedShown)
+            {
+                var st = allSourceIds.ToDictionary(id => id, _ => "dim");
+                foreach (var id in used) st[id] = "matched";
+                foreach (var id in dropped) st[id] = "rejected";
+                for (int prev = 0; prev < joinedShown; prev++)
+                    if (IsOuter(j.JoinPaths[prev])) st[mRowIds[prev]] = "outer";
+                return st;
+            }
+
+            void EmitPath(int i)
+            {
+                var p = j.JoinPaths[i];
+
+                // The current path's rows light up (active). A row an outer join keeps
+                // without a partner is marked "outer" instead.
+                bool outer = IsOuter(p);
+                var active = Base(i);
+                for (int k = 0; k < t; k++)
+                    if (Has(p, k)) active[tableRowIds[k][p[k]]] = outer ? "outer" : "active";
+
+                string forming, emitting;
+                if (outer)
+                {
+                    var kept = string.Join(" + ", Enumerable.Range(0, t).Where(k => Has(p, k)).Select(Ref));
+                    var missing = string.Join(", ", Enumerable.Range(0, t).Where(k => !Has(p, k)).Select(Ref));
+                    forming = $"No match in {missing} — the outer join keeps this {kept} row";
+                    emitting = $"Add joined row {i + 1} with NULLs for {missing}";
+                }
+                else
+                {
+                    forming = $"Forming joined row {i + 1} of {mm}";
+                    emitting = $"Add joined row {i + 1} to result";
+                }
+
+                // Forming: draw the connectors across the tables, result row not yet added
+                frames.Add(F(new Dictionary<string, string>(active), Hide(i, 0), pathEdges[i], phase: forming));
+
+                // Emit: the completed row drops into the joined table
+                var emit = new Dictionary<string, string>(active) { [mRowIds[i]] = "new" };
+                frames.Add(F(emit, Hide(i + 1, 0), pathEdges[i], phase: emitting));
+
+                for (int k = 0; k < t; k++)
+                    if (Has(p, k)) used.Add(tableRowIds[k][p[k]]);
+            }
+
+            // In-depth: test left row l against every right row in one step
+            void Compare(int l, int joinedShown)
+            {
+                var st = Base(joinedShown);
+                st[tableRowIds[0][l]] = "active";
+                int n = cmp![l].Length, hits = 0;
+                for (int r = 0; r < n; r++)
+                {
+                    st[tableRowIds[1][r]] = cmp[l][r] ? "active" : "miss";
+                    if (cmp[l][r]) hits++;
+                }
+
+                var phase = $"Compare {Ref(0)} row {l + 1} with each {Ref(1)} row: ON is ";
+                if (hits > 0) phase += $"true for {hits}, false for {n - hits}";
+                else if (j.JoinPaths.Any(p => p[0] == l)) phase += $"false for all {n} — no match";
+                else
+                {
+                    phase += $"false for all {n} — no match, so the {j.Steps[0].JoinType} drops this row";
+                    dropped.Add(tableRowIds[0][l]);
+                }
+                frames.Add(F(st, Hide(joinedShown, 0), cmpEdges[l], phase: phase));
+            }
+
+            frames.Add(F(hidden: Hide(0, 0), phase: inDepth
+                ? $"Ready — test each {Ref(0)} row against every {Ref(1)} row " +
+                  $"({tableRowIds[0].Count} × {tableRowIds[1].Count} comparisons)"
+                : $"Ready — {mm} joined row(s)"));
+
+            if (inDepth)
+            {
+                // Nested loop: each left row's comparisons, then the joined rows it forms.
+                // Rows with no left partner (RIGHT/FULL joins) come last, as SQLite emits them.
+                int next = 0;
+                for (int l = 0; l < tableRowIds[0].Count; l++)
+                {
+                    Compare(l, next);
+                    while (next < mm && j.JoinPaths[next][0] == l) EmitPath(next++);
+                }
+                while (next < mm) EmitPath(next++);
             }
             else
+                for (int i = 0; i < mm; i++) EmitPath(i);
+
+            var joined = used.ToDictionary(id => id, _ => "matched");
+            foreach (var id in dropped) joined[id] = "rejected";
+            for (int i = 0; i < mm; i++) joined[mRowIds[i]] = JoinedState(i);
+            int outerCount = j.JoinPaths.Count(IsOuter);
+            var joinDone = outerCount > 0
+                ? $"Join complete — {mm} row(s), {outerCount} with NULLs from the outer join"
+                : $"Join complete — {mm} row(s)";
+            frames.Add(F(joined, Hide(mm, 0), phase: joinDone));
+
+            // ── Filter phase: test each joined row against the WHERE ─────────
+            if (filter != null)
             {
-                forming = $"Forming joined row {i + 1} of {mm}";
-                emitting = $"Add joined row {i + 1} to result";
+                int shown = 0;
+                for (int i = 0; i < mm; i++)
+                {
+                    Dictionary<string, string> Decided()
+                    {
+                        var st = new Dictionary<string, string>(joined);
+                        for (int prev = 0; prev < i; prev++)
+                            st[mRowIds[prev]] = filter.MatchMask[prev] ? JoinedState(prev) : "rejected";
+                        for (int r = 0; r < shown; r++) st[rRowIds[r]] = "matched";
+                        return st;
+                    }
+
+                    var scan = Decided();
+                    scan[mRowIds[i]] = "scanning";
+                    frames.Add(F(scan, Hide(mm, shown), phase: $"WHERE: test joined row {i + 1} of {mm}"));
+
+                    for (int ci = 0; ci < condCount; ci++)
+                    {
+                        var cst = Decided();
+                        cst[mRowIds[i]] = "scanning";
+                        for (int cj = 0; cj <= ci; cj++)
+                            cst[cardIds[cj]] = filter.ConditionResults[cj][i] ? "true" : "false";
+                        frames.Add(F(cst, Hide(mm, shown), phase: $"Check: {filter.Conditions[ci]}"));
+                    }
+
+                    var res = Decided();
+                    var resEdges = new List<int>();
+                    if (filter.MatchMask[i])
+                    {
+                        res[mRowIds[i]] = JoinedState(i);
+                        res[rRowIds[keptSlot[i]]] = "new";
+                        resEdges.Add(keptEdge[i]);
+                        shown = keptSlot[i] + 1;
+                    }
+                    else res[mRowIds[i]] = "rejected";
+                    frames.Add(F(res, Hide(mm, shown), resEdges,
+                        phase: filter.MatchMask[i] ? "✓ kept by WHERE" : "✗ filtered out by WHERE"));
+                }
+
+                var done = new Dictionary<string, string>(joined);
+                for (int i = 0; i < mm; i++)
+                    done[mRowIds[i]] = filter.MatchMask[i] ? JoinedState(i) : "rejected";
+                foreach (var id in rRowIds) done[id] = "matched";
+                frames.Add(F(done, phase: $"Filter complete — {rRowIds.Count} of {mm} row(s) kept"));
             }
-
-            // Forming: draw the connectors across the tables, result row not yet added
-            frames.Add(F(new Dictionary<string, string>(active), Hide(i, 0), pathEdges[i], phase: forming));
-
-            // Emit: the completed row drops into the joined table
-            var emit = new Dictionary<string, string>(active) { [mRowIds[i]] = "new" };
-            frames.Add(F(emit, Hide(i + 1, 0), pathEdges[i], phase: emitting));
-
-            for (int k = 0; k < t; k++)
-                if (Has(p, k)) used.Add(tableRowIds[k][p[k]]);
-        }
-
-        var joined = used.ToDictionary(id => id, _ => "matched");
-        for (int i = 0; i < mm; i++) joined[mRowIds[i]] = JoinedState(i);
-        int outerCount = j.JoinPaths.Count(IsOuter);
-        var joinDone = outerCount > 0
-            ? $"Join complete — {mm} row(s), {outerCount} with NULLs from the outer join"
-            : $"Join complete — {mm} row(s)";
-        frames.Add(F(joined, Hide(mm, 0), phase: joinDone));
-
-        // ── Filter phase: test each joined row against the WHERE ─────────────
-        if (filter != null)
-        {
-            int shown = 0;
-            for (int i = 0; i < mm; i++)
-            {
-                Dictionary<string, string> Decided()
-                {
-                    var st = new Dictionary<string, string>(joined);
-                    for (int prev = 0; prev < i; prev++)
-                        st[mRowIds[prev]] = filter.MatchMask[prev] ? JoinedState(prev) : "rejected";
-                    for (int r = 0; r < shown; r++) st[rRowIds[r]] = "matched";
-                    return st;
-                }
-
-                var scan = Decided();
-                scan[mRowIds[i]] = "scanning";
-                frames.Add(F(scan, Hide(mm, shown), phase: $"WHERE: test joined row {i + 1} of {mm}"));
-
-                for (int ci = 0; ci < condCount; ci++)
-                {
-                    var cst = Decided();
-                    cst[mRowIds[i]] = "scanning";
-                    for (int cj = 0; cj <= ci; cj++)
-                        cst[cardIds[cj]] = filter.ConditionResults[cj][i] ? "true" : "false";
-                    frames.Add(F(cst, Hide(mm, shown), phase: $"Check: {filter.Conditions[ci]}"));
-                }
-
-                var res = Decided();
-                var resEdges = new List<int>();
-                if (filter.MatchMask[i])
-                {
-                    res[mRowIds[i]] = JoinedState(i);
-                    res[rRowIds[keptSlot[i]]] = "new";
-                    resEdges.Add(keptEdge[i]);
-                    shown = keptSlot[i] + 1;
-                }
-                else res[mRowIds[i]] = "rejected";
-                frames.Add(F(res, Hide(mm, shown), resEdges,
-                    phase: filter.MatchMask[i] ? "✓ kept by WHERE" : "✗ filtered out by WHERE"));
-            }
-
-            var done = new Dictionary<string, string>(joined);
-            for (int i = 0; i < mm; i++)
-                done[mRowIds[i]] = filter.MatchMask[i] ? JoinedState(i) : "rejected";
-            foreach (var id in rRowIds) done[id] = "matched";
-            frames.Add(F(done, phase: $"Filter complete — {rRowIds.Count} of {mm} row(s) kept"));
+            return frames;
         }
 
         // Title reads like the FROM clause: "a ⋈ b" for inner joins, the keyword otherwise
@@ -534,7 +610,7 @@ public class SceneBuilderService
         }
         var sub = string.Join("  ·  ", j.Steps.Select(s => s.OnCondition).Where(s => s.Length > 0));
         if (filter != null) sub += (sub.Length > 0 ? "  ·  " : "") + $"WHERE {filter.WhereText}";
-        return Finish("join_chain", title, sub, nodes, edges, frames);
+        return Finish("join_chain", title, sub, nodes, edges, frames, detail, j.ComparisonsUnavailable);
 
         // Name a table in phase text; aliases only disambiguate self-joins
         string Ref(int k) => j.Aliases[k] != null && j.TableNames.Count(n => n == j.TableNames[k]) > 1

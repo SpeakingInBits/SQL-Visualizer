@@ -105,7 +105,9 @@ public record JoinChainResult(
     List<ColumnHeader> MergedColumns,           // projection, plus any columns the WHERE reads
     List<Dictionary<string, object?>> MergedRows,
     bool Truncated,
-    JoinFilter? Filter = null)                  // null when the query has no WHERE
+    JoinFilter? Filter = null,                  // null when the query has no WHERE
+    bool[][]? Comparisons = null,               // single join: [left row][right row] → ON is TRUE
+    string? ComparisonsUnavailable = null)      // why Comparisons is null, for the in-depth toggle
     : VizResult("join_chain")
 {
     /// JoinPaths entry for a table that had no matching row (NULL-extended by an outer join).

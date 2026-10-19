@@ -497,13 +497,59 @@ public class QueryExecutorService
                              mergedCols.Take(specs.Count).ToList())
             : null;
 
+        // In-depth mode: every left/right row comparison, including the ones that fail
+        bool[][]? comparisons = null;
+        string? unavailable;
+        long pairCount = tableRows.Count == 2 ? (long)tableRows[0].Count * tableRows[1].Count : 0;
+        if (steps.Count != 1)
+            unavailable = "In-depth view is available for queries with a single JOIN";
+        else if (onConds[0].Length == 0)
+            unavailable = "A join without an ON condition has no comparisons to show";
+        else if (exact == null)
+            unavailable = "In-depth view needs tables with rowids (not views)";
+        else if (truncated || pairCount > MaxComparisonPairs)
+            unavailable = $"Too many rows for the in-depth view (at most {MaxComparisonPairs} row pairs)";
+        else
+        {
+            comparisons = CompareAllPairs(c, tableNames, aliases, onConds[0], exact.RowIds);
+            unavailable = null;
+        }
+
         return new JoinChainResult(tableNames, aliases, tableCols, tableRows, steps,
-            paths, mergedCols, mergedRows, truncated, filter);
+            paths, mergedCols, mergedRows, truncated, filter, comparisons, unavailable);
+    }
+
+    /// <summary>The most left×right row pairs the in-depth join view will compare.</summary>
+    private const int MaxComparisonPairs = 625;
+
+    /// <summary>Has SQLite evaluate a single join's ON condition for every pair of source rows —
+    /// the nested loop a join conceptually runs — so the in-depth view can show the pairs that
+    /// fail as well as the ones that match. NULL (unknown) counts as false, as it does in ON.</summary>
+    private static bool[][] CompareAllPairs(SqliteConnection c, List<string> tableNames,
+        List<string?> aliases, string onCond, List<List<long>> rowIds)
+    {
+        string Source(int k) => aliases[k] != null ? $"{tableNames[k]} {aliases[k]}" : tableNames[k];
+        string Ref(int k) => aliases[k] ?? tableNames[k];
+
+        var posOf = rowIds.Select(ids => ids.Select((id, i) => (id, i)).ToDictionary(x => x.id, x => x.i)).ToList();
+        var result = rowIds[0].Select(_ => new bool[rowIds[1].Count]).ToArray();
+
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = $"SELECT {Ref(0)}.rowid, {Ref(1)}.rowid, CASE WHEN ({onCond}) THEN 1 ELSE 0 END " +
+                          $"FROM {Source(0)} CROSS JOIN {Source(1)}";
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            if (posOf[0].TryGetValue(reader.GetInt64(0), out var l) && posOf[1].TryGetValue(reader.GetInt64(1), out var r))
+                result[l][r] = reader.GetInt64(2) != 0;
+        }
+        return result;
     }
 
     private sealed record RowidJoin(
         List<List<ColumnHeader>> TableCols,
         List<List<Dictionary<string, object?>>> TableRows,
+        List<List<long>> RowIds,                 // [table][row position] → rowid
         List<int[]> Paths,                       // sorted by source row, NoMatch last
         List<List<bool>> ConditionResults,       // [condition][path]
         List<bool> MatchMask,                    // [path] passes the whole WHERE
@@ -549,6 +595,7 @@ public class QueryExecutorService
         // Load each table (in rowid order) and translate rowids into row positions
         var tableCols = new List<List<ColumnHeader>>();
         var tableRows = new List<List<Dictionary<string, object?>>>();
+        var rowIds = new List<List<long>>();
         var posOf = new List<Dictionary<long, int>>();
         for (int k = 0; k < t; k++)
         {
@@ -556,6 +603,7 @@ public class QueryExecutorService
             var (cols, rows, ids, more) = FetchTableByRowid(c, tableNames[k], needed);
             tableCols.Add(cols);
             tableRows.Add(rows);
+            rowIds.Add(ids);
             posOf.Add(ids.Select((id, i) => (id, i)).ToDictionary(x => x.id, x => x.i));
             truncated |= more;
         }
@@ -572,7 +620,7 @@ public class QueryExecutorService
             ? order.Select(i => flags[i][conditions.Count]).ToList()
             : order.Select(_ => true).ToList();
 
-        return new RowidJoin(tableCols, tableRows, paths, condResults, mask, truncated);
+        return new RowidJoin(tableCols, tableRows, rowIds, paths, condResults, mask, truncated);
     }
 
     private static int ComparePaths(int[] a, int[] b)

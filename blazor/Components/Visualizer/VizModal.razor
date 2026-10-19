@@ -30,12 +30,21 @@
                 <button @onclick="() => _canvas?.ZoomBy(1.2)" title="Zoom in">➕</button>
             </div>
 
+            @if (Scene.VizType == "join_chain")
+            {
+                <label class="vm-toggle @(HasDetail ? "" : "disabled")"
+                       title="@(HasDetail ? "Show every row comparison, including the ones where ON is false" : Scene.DetailUnavailable)">
+                    <input type="checkbox" checked="@_inDepth" disabled="@(!HasDetail)" @onchange="ToggleInDepth" />
+                    In-depth
+                </label>
+            }
+
             <span class="vm-phase">@CurrentPhase</span>
             <span class="frame-counter">Step @_frame / @(FrameCount - 1)</span>
         </div>
 
         <div class="viz-modal-body">
-            <NodeCanvas @ref="_canvas" Scene="Scene" Frame="Scene.Frames[_frame]" />
+            <NodeCanvas @ref="_canvas" Scene="Scene" Frame="Frames[_frame]" />
             <div class="vm-hint">
                 <span class="vm-hint-mouse">Scroll to zoom · drag to pan</span>
                 <span class="vm-hint-touch">Pinch to zoom · drag to pan</span>
@@ -53,9 +62,12 @@
     private int _speed = 5;
     private bool _playing;
     private System.Threading.Timer? _timer;
+    private bool _inDepth;
 
-    private int FrameCount => Math.Max(1, Scene.Frames.Count);
-    private string CurrentPhase => Scene.Frames[_frame].Phase ?? "";
+    private bool HasDetail => Scene.DetailFrames != null;
+    private List<VizFrame> Frames => _inDepth && Scene.DetailFrames != null ? Scene.DetailFrames : Scene.Frames;
+    private int FrameCount => Math.Max(1, Frames.Count);
+    private string CurrentPhase => Frames[_frame].Phase ?? "";
 
     protected override void OnParametersSet()
     {
@@ -87,6 +99,14 @@
     private void StepForward() { StopTimer(); if (_frame < FrameCount - 1) _frame++; }
     private void StepBack()    { StopTimer(); if (_frame > 0) _frame--; }
     private void Reset()       { StopTimer(); _frame = 0; }
+
+    // The two modes have different frame lists, so switching starts over
+    private void ToggleInDepth(ChangeEventArgs e)
+    {
+        StopTimer();
+        _inDepth = e.Value is true;
+        _frame = 0;
+    }
 
     private void StopTimer() { _playing = false; _timer?.Dispose(); _timer = null; }
 
